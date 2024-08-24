@@ -1,0 +1,322 @@
+\documentclass{article}[11pt]
+\usepackage[all]{xy}
+\author{Nathan Sanders \\ ncsander@indiana.edu}
+\title{Repairing OT: Implement OT with a finite {\sc Gen}}
+\begin{document}
+\maketitle
+\begin{itemize}
+\section{The Theory}
+\item OT is comprised of four components.
+\item Stop me if you've heard this one before.
+\item They are {\sc Gen}, {\sc Input}, {\sc Con} and {\sc Eval}.
+\item {\sc Gen} produces an infinite number of candidates.
+\item {\sc Input} is the desired form.
+\item {\sc Con} is a possibly ordered set of constraints.
+\begin{displaymath}
+  \xymatrix{ \textrm{\sc Gen} \ar[dr] & \textrm{\sc Input} \ar[d] & \textrm{\sc Con}\ar[dl] \\
+    & \textrm{\sc Eval} \ar[d] & \\
+  & \textrm{\sc Output} & }
+\end{displaymath}
+\item Each constraint is a function of type
+  \verb+Input*[Candidate]->[Candidate]+
+\item In other words, each constraints takes the set of candidates and produces
+  a new, smaller, set of candidates. (If you must know, each constraint is the
+  identity function if all candidates assess the same number of violations.)
+\item {\sc Eval} is then (nearly) just \verb+foldl compose (Gen input) Con+.
+  Or maybe
+  \verb+foldr compose (Gen input) Con+. I can never remember which.
+\item The result of running OT for some {\sc Input} is an {\sc Output} which is the only
+  candidate left after running the infinite candidates through
+\item This particular take is best explained in Lodovici and Prince (1999). (MATH
+  WARNING)
+\item I like it a lot because it is friendly to constraint demotion learning algorithms
+  and certain implementation styles.
+\item There are lot of non-obvious ramifications of the above definitions.
+  For example, there are some candidates produced by {\sc Gen} that can never
+  win, no matter what order {\sc Con} has.
+\item This is a possible optimisation that leads to three good ways of representing
+  {\sc Con}: \verb+[Constraint]+, \verb+[[Constraint]]+, \verb+Set Constraint+.
+  The first is the theoretically correct complete ranking, the second backs off
+  by allowing strata, and the third doesn't specify a constraint ranking at all.
+\item By the way, you will have noticed that I am using Haskell notation for my
+  types. I hope this doesn't scare you. There are many Haskell tutorials and
+  I can loan you my Haskell book if you are curious.
+\section{The problem}
+\item OT requires an infinite {\sc Gen}.
+\item Infinite things are difficult to implement on real hardware (brains or circuits).
+\item since this is a theory, you can always say ``Ho, ho! This {\sc Eval}
+  is for reading, not for computing.'' (to co-opt the words of McCarthy
+  (in Stoyan (1984))
+\item Or you can say with Chomsky and Halle (1968) that ``attempting to get rid
+  of the infiniteness because of implementation issues reveals a serious gap in
+  understanding.'' (Quoted in McCarthy (2000) I think)
+\item But of course neither quote gives you an implementation of OT---there
+  must be compromises at some point.
+  \section{A possible solution}
+\item The traditional solution is to use the basic model described above and
+  look for places to optimise.
+\item For example, you don't need to consider candidates that could never win.
+\item The naive approach to this is to start with the \verb+Set Constraint+
+  representation of {\sc Con} and generate every possible ordered
+  {\sc Con} \verb+:: [Constraint]+, then only record candidates that win under some
+  ordering. Unfortunately there are $|Con|!$ of these.
+\item Another method is detailed by Lodovici and Prince (2006), who use a tree
+  to record how existing candidates bound succeeding candidates.
+\item This test is fast in the average case---$O(n \log n)$ or $O(n^2 \log n)$
+  (I can't remember which).
+\item But you still have to test every candidate to see if it improves the bound.
+\item This is, once again, INFINITE. Too Bad.
+\item What you really want is a way to instruct {\sc Gen} to produce the most likely
+  candidates first and proceed from there.
+\item To do this, you'd need some way to direct generation of candidates
+  so that {\sc Gen} would know when no more candidates could ever win.
+  \section{Backward solution}
+\item But wait, this can only be accomplished by having the members of {\sc Con}
+  communicate with {\sc Gen}, because {\sc Con} determines which candidates can possibly
+  win.
+\item Why not reverse things completely and have {\sc Con} specify which candidates
+  it wants to see?
+\item Well, because {\sc Con} traditionally does not specify new candidates.
+  It only removes them.
+\item But let's reverse things anyway. Let's create a parallel to {\sc Con}
+  called {\sc Rep} that does not reduce its candidate set but increases it.
+\item The difference between the two is that members of {\sc Con} only know how to
+  spot violations. Members of {\sc Rep} know how to repair violations as well.
+\item This method replaces {\sc Gen} with a search that starts from the input, which
+  fully satisfies faithfulness constraints. It procceds to generate all candidates that
+  improve according to some markedness constraint.
+\item So for each candidate in a repairing constraint's input, a new set of
+  candidates are generated that are better {\it for that constraint only}.
+\item {\sc Rep} iterates between faithfulness constraints and markedness constraints
+  until the candidate set stops growing.
+\item In the diagram below, {\sc Rep} replaces {\sc Gen} of theoretical OT. It receives
+  {\sc Input} as a parameter, unlike {\sc Gen}, which takes no parameters.
+\begin{displaymath}
+    \xymatrix{ \textrm{\sc Rep} \ar[dr] & \textrm{\sc Input} \ar[l] \ar[d] & \textrm{\sc Con}\ar[dl] \\
+    & \textrm{\sc Eval} \ar[d] & \\
+  & \textrm{\sc Output} & }
+\end{displaymath}
+  \section{Example}
+\item The example is (once again) McCarthy's Axininca Campa example from
+  the Thematic Guide.
+\item I know you're tired of seeing the same example over and over, but beating
+  an example into the ground is a venerable tradition in Computer Science.
+\item Epenthesis in Axininca Campa has four revelant constraints: Onset,
+  Max, Dep and Dep-init-$\sigma$.
+\item Onset is the only markedness constraint. Max and Dep are straightforward.
+  Dep-init-$\sigma$ only assesses Dep violations for the first segment of the
+  input.
+\subsection{Dep-init-$\sigma$}
+\item Let's start with Dep-init-$\sigma$ since it's the simplest.
+\item The code snippets are in Python. I hope this doesn't scare
+  you. There are many Python tutorials and the IULC has a Python book
+  (courtesy of Tossi) if you are curious.
+\item Remember Dep-init-$\sigma$ assesses a violation if the first segment of
+  the output does not correspond with the first segment of the input.
+\item 
+\begin{verbatim}
+def depInitSigma(i,o):
+    return int(optimal(levenshtein(i,o))[0][0]==INS)
+\end{verbatim}
+\item Since Dep-init-$\sigma$ is a faithfulness constraint, it takes both the input
+  and an output candidate. (This implementation has constraints of type
+  \verb+String*String->Int+
+\item Most faithfulness constraints start by determining
+  correspondence by retrieving the optimal path through a Levenshtein table.
+\item I don't want to talk much about Levenshtein distance
+  (string-edit-distance) but I can point you to good explanations
+  about it. (Jurafsky and Martin or Kruskal or Nerbonne and Heeringa)
+\item The optimal path is a list of pairs \verb+:: (Op, Location)+.
+\item For example,
+\begin{verbatim}
+[(INS, (0,1)),
+ (SUB, (1,2)),
+ (SUB, (2,3)),
+ (DEL, (3,3))]
+\end{verbatim}
+\item We
+  are only interested in the first operation and whether it is an
+  insert. If it is, that's a violation of Dep-init-$\sigma$. (The
+  conversion to int makes the constraint return a number of violations
+  rather than a boolean)
+\item Now let's compare this to the repairing version:
+\item
+\begin{verbatim}
+def dep_init_repair(i,o):
+    if optimal(levenshtein(i,o))[0][0]==INS:
+        return [o, o[1:]]
+    else:
+        return [o]
+\end{verbatim}
+\item This repairing constraint is a faithfulness constraint and thus has type
+  \verb+String*String->[String]+.
+\item Notice that the search for violations is exactly the same. However, instead of
+  returning the number of violations (0 or 1), the constraint returns all possible
+  repairs to the violation.
+\item If there are no violations, of course the only repair is the original output
+  candidate.
+\item If there is a violation, the two possible repairs are `no repair' or `delete
+  the inserted segment'. The first branch returns these repairs.
+\subsection{Dep}
+\item Now let's compare the two versions of Dep.
+\item
+\begin{verbatim}
+def dep(i,o):
+    return count(INS, optimal(levenshtein(i,o)), key=fst)
+\end{verbatim}
+\item It counts the number of INS operations in the optimal path and
+  returns that.
+\item Now here is the repairing version.
+\item
+\begin{verbatim}
+def dep_repair(i,o):
+    return [''.join(remove_ns(o, map(fst, cs)))
+            for cs in powerset(unaligned_chars(i,o,INS))]
+\end{verbatim}
+\item There are a lot of undefined functions here,
+  (\verb+remove_ns, powerset, unaligned_chars+) but the overview is that
+  we want to find all chars that have been inserted and remove them from the
+  output form.
+\item But why the power set of the chars that have been inserted?
+\item Remember that we're trying to generate all possible repairs of the current
+  candidate. So if the input is ``inkomai'' and the output is ``tinkomati'', all repairs
+  are ``tinkomati'', ``inkomati'', ``tinkomai'' and ``inkomai''.
+\item For completeness, here are
+  \verb+remove_ns, powerset, unaligned_chars+
+\begin{verbatim}
+def unaligned_chars(i, o, op):
+    chars = []
+    offset = 0
+    for (type, (start,stop)) in optimal(levenshtein(i,o)):
+        if type==op==DEL: # this is a lame hack.
+            chars.append((start+offset, i[start]))
+        elif type==op==INS: # but i[start] is oobounds for INS
+            chars.append((start+offset, -1))
+        if type==DEL:
+            offset -= 1
+        elif type==INS:
+            offset += 1
+    return chars
+def remove_ns(l, ns):
+    ns.reverse()
+    l = list(l)
+    for n in ns:
+        del l[n]
+    return l
+def epenthesise(syllables, indices, char='t'):
+    syllables = list(syllables)
+    for i in indices:
+        syllables[i] = 't' + syllables[i]
+    return syllables
+def powerset(l):
+    return ([x for i,x in enumerate(l) if 2**i & n] for n in xrange(2**len(l)))
+\end{verbatim}
+\subsection{Onset}
+\item Onset is a markedness constraint, so it only looks at the output string
+  (\verb+String->Int+ in this implementation):
+\begin{verbatim}
+def onset(o):
+    return [syll[0]['cons'] for syll in syllabify(unify(o))].count(False)
+\end{verbatim}
+\item The function counts the number of non-consonantal segments in position 0
+  of the syllables of the output candidate. \verb+syllabify+ is a
+  hairy finite state machine that does the syllabification, and
+  \verb+unify+ is a thin wrapper around a dictionary of feature
+  structure.
+\item The repairing constraint is a bit more complicated
+\begin{verbatim}
+def onset_repair(o):
+    def recreate_syllables(syllables):
+    # this is kind of a hack ok to avoid returning feature structure
+        i = 0
+        acc = []
+        for s in syllables:
+            acc.append(o[i:i+len(s)])
+            i += len(s)
+        return acc
+    ident = lambda syllable: syllable
+    delete = lambda syllable: ''
+    epenthesise = lambda syllable: 't' + syllable
+
+    syllables = syllabify(unify(o))
+    opss = cross(*[([ident] if syll[0]['cons'] else [ident,delete,epenthesise])
+                   for syll in syllables])
+    syllables = recreate_syllables(syllables)
+    return (''.join(concat(op(syll) for op,syll in izip(ops,syllables)))
+            for ops in opss)
+\end{verbatim}
+\item You should ignore the nested function (which is kind of a hack) and
+  look at the three repair functions: no repair (identity), deletion and epenthesis.
+\item In the defiintion of \verb+opss+, each syllable is assigned some set of these
+  repairs. If the syllable already has an onset, it gets only 'no repair', while
+  onsetless syllables are assigned all three repairs.
+\item \verb+cross+ flattens these choices into a list of repairs which are then
+  executed in the return statement.
+  \section{Conclusion}
+\item Does it work?
+\item Well, for the one example I've shown you, it generates an impressive list
+  of candidates, all of which are plausible (assuming a syllabic n which appears
+  because it is not prevented by the syllabification algorithm.)
+\item
+  \begin{verbatim}
+[('nkomati', [0, 1, 0, 1]),
+('koma',     [0, 0, 0, 3]),
+('ikomati',  [1, 1, 0, 1]),
+('nkomai',   [1, 0, 0, 1]),
+('inkomati', [1, 1, 0, 0]),
+('tinkomati',[0, 2, 1, 0]),
+('tinkoma',  [0, 1, 1, 1]),
+('komai',    [1, 0, 0, 2]),
+('tikomati', [0, 2, 1, 1]),
+('ikoma',    [1, 0, 0, 2]),
+('tikoma',   [0, 1, 1, 2]),
+('komati',   [0, 1, 0, 2]),
+('inkomai',  [2, 0, 0, 0]),
+('tinkomai', [1, 1, 1, 0]),
+('inkoma',   [1, 0, 0, 1]),
+('ikomai',   [2, 0, 0, 1]),
+('tikomai',  [1, 1, 1, 1]),
+('nkoma',    [0, 0, 0, 2])]
+\end{verbatim}
+\item Using Lodovici and Prince's bounding algorithm, this set can be quickly
+  reduced to a smaller 12-candidate set by getting rid of intermediate
+  candidates that turn out to be harmonically bounded (though perhaps interesting
+  to a human linguist).
+\item The algorithm is at least somewhat resistant to error; a bug in Onset didn't
+  generate all possibly combinations of repairs, but the winning candidate set
+  was the same before and after the bug fix.
+\item
+\begin{verbatim}
+[('nkomati', [0, 1, 0, 1]),
+('koma',     [0, 0, 0, 3]),
+('ikomati',  [1, 1, 0, 1]),
+('nkomai',   [1, 0, 0, 1]),
+('inkomati', [1, 1, 0, 0]),
+('tinkomati',[0, 2, 1, 0]),
+('tinkoma',  [0, 1, 1, 1]),
+('komati',   [0, 1, 0, 2]),
+('inkomai',  [2, 0, 0, 0]),
+('tinkomai', [1, 1, 1, 0]),
+('inkoma',   [1, 0, 0, 1]),
+('tikomai',  [1, 1, 1, 1]),
+('nkoma',    [0, 0, 0, 2])]
+\end{verbatim}
+\item Aside: you can see the beginnings of problem which is larger for a complete
+  search: linguistic constraint sets are far too small to fully specify the data. Given
+  the phonotactics of the language, I would bet that 'nkoma' is an invalid candidate.
+\item Of course despite an encouraging beginning, I need to fully characterise
+  the search used here.
+\item Specifically, I need to find out if it will always terminate.
+\item If it does, whether it finds all unbounded candidates.
+\item And if it doesn't, whether it even finds all unbounded candidates in a
+  particular direction.
+\item To use the hill-climbing analogy for search, it may get stuck at a local
+  maximum, but will it have covered all ground between that point and the
+  stopping point?
+\item These questions are UNANSWERED. Please comment!
+\end{itemize}
+\end{document}
+%%% Local Variables: 
+%%% mode: latex
+%%% TeX-master: t
+%%% End: 

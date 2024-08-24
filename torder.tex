@@ -1,0 +1,116 @@
+\documentclass[11pt]{article}
+\author{Nathan C. Sanders \\ ncsander@indiana.edu}
+\title{An Efficient Algorithm for Generating T-Orders}
+\begin{document}
+\maketitle
+\begin{enumerate}
+  \section{T-Orders}
+\item T-Orders were noticed by Anttila (2006) in his work on variation
+  in language.
+
+\item
+  They can be used to predict variation from some constraint set.
+\item The outputs that win the most in the factorial typology are also the ones that
+  appear the most in variation.
+\item This agrees with the view that language variation arises from permutations
+  of a fixed constraint set.
+\subsection{T-Order Definition}
+\item A T-Order is a directed acyclic graph whose nodes are all possibly winning
+  candidates for some input and set of constraints.
+\item This `winning set' is an important concept that is useful later.
+\item There is an edge from any node whose appearance always implies the
+  appearance of another node.
+\item Actually, it's the transitive closure of this graph. But who's counting?
+\item For example, assume three inputs: /a/, /b/ and /c/.
+\item $\forall C , (C(/a/) \mapsto [aa]) \to (C(/b/) \mapsto [bb])$ would
+  produce an edge from [aa] to [bb].
+\item This notation assumes that $C$ is an ordered composition of
+  the constraints in {\sc Con}, using the model of constraints as functions from
+  an output set to a smaller output set.
+\item One point to notice is that harmonically bounded candidates can never have
+  any connecting edges, because an input will never map to them as the winning
+  candidate.
+\item This is important later, because in some of the methods I'm trying generate
+  all edges to and from harmonically bounded candidates and they have to be
+  removed in a separate step.
+\subsection{T-Order Uses}
+\item Uses for t-orders are explained well in Anttila (2006).
+\item Essentially, the frequency of items in variation increases down the
+  implicational hierarchy formed by the t-order.
+\item For example, if [aa] $\to$ [bb] $\to$ [aaa], then [aa] will be
+  the least common variant of the three.
+\item Somehow this explanation is wrong, because it seems important enough
+  to have relations between outputs of disparate inputs.
+\item Also I don't think [aa] $\to$ [aaa] is possible since that would mean that
+  a dialect with [aa] would also have [aaa]: two outputs for the same input.
+  \section{T-Order Factorial Generation}
+\subsection{Naive Generation}
+\item The naive way to generate a t-order is to evaluate all possible orderings
+  of the constraint set and track which outputs win for each input.
+\item Anttila and ?'s software works with OTSoft (Hayes 1991 to 2004) to do this.
+\item However, this method does not scale past half a dozen constraints or so
+  because of the factorial typology that must be calculated.
+\item Anything besides $5!$ is {\it terra incognita} for computer
+  scientists, so it would be best to avoid factorial completely.
+  \subsection{Bounding Sets}
+\item To avoid calculating all constraint orders, we need to step back and
+  re-arrange the problem.
+\item What is really interesting is the possible winners, not the
+  factorial typology itself.
+\item Winners are defined as those candidates that can win for some arrangement
+  of the candidate set. Winners are exactly those candidates that have a node in
+  the t-order.
+\item Prince and Lodovici provide a fast way to find all possible winners for a
+  set of constraints.
+\item By splitting the necessary factorial arrangement of constraints into a tree
+  structure, less work need be done.
+\item I believe the worst case running time is still factorial, but the average case
+  is far better. (I need to re-read the section in which running time is analysed.)
+\item This is because not all nodes of the tree need to be explored---after a
+  certain condition is reached, a node does not have to investigate its children.
+\item TODO: Describe the algorithm for constructing the tree here.
+\item I have a couple of e-mails that describe it fairly well. (Or from my journal.)
+\item Essentially, this arranges the candidates so that each node represents all
+  possible winners given only the constraints in play for that node.
+\item The additional terminal case of only having one winner means that
+  children of that node are uninteresting and all factorial typologies in which the
+  remaining constraints are critical will produce the same winner.
+\item So no further work needs to be done.
+  \section{Extracting T-Orders from Bounding Trees}
+\item Since the tree of bounding sets knows for any constraint set which
+  candidates are viable, it should be able to produce the same information on
+  which candidates win relative to other candidates.
+\item One simple way to calculate this is to use all leaf nodes that
+  have two winning candidates.
+\item There is an edge from any of these winners that bounds any other winner.
+\item This method dumps all candidates into the same pool, regardless of
+  input form.
+\item Unfortunately, this does not work for candidates with identical violation
+  profiles.
+\item There can still be differences in the factorial typology based on the
+  competing candidates.
+\item So my most recent attempt generates separate bounding trees for each
+  input separately: the candidate set is divided by input and the bounding trees
+  are generated in parallel.
+\item However, I haven't discovered the correct way to extract edges from this.
+\item It is possible to retain the simple test from a grouped bounding tree, but
+  the problem is finding edges between candidates with identical violation profiles
+  without including spurious edges.
+\item Even if the methods are combined then further testing is needed to make
+  sure that it has adequate coverage for more examples.
+  \section{Conclusion}
+\item T-orders are pretty interesting.
+\item One thing that makes them interesting is that they involve a factorial process
+  of generating a complete typology.
+\item A successful implementation must provide a way to handle this in an
+  efficient way.
+\item Two basic problem-solving methods are useful in this: dividing the work
+  up as a tree and using domain knowledge to improve data structure efficiency.
+\item Although the current methods don't produce the right answer, they are
+  pretty close and pretty fast.
+\end{enumerate}
+\end{document}
+%%% Local Variables: 
+%%% mode: latex
+%%% TeX-master: t
+%%% End: 

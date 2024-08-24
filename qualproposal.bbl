@@ -1,0 +1,33 @@
+\begin{thebibliography}{}
+
+\bibitem[\protect\citeauthoryear{Hayes \bgroup et~al.\ \egroup
+  }{2003}]{hayes03}
+Hayes, Bruce, Bruce Tesar, and Kie Zuraw. 2003.
+\newblock Otsoft 2.1.
+\newblock software package,
+  http://www.linguistics.ucla.edu/people/hayes/otsoft/.
+
+\bibitem[\protect\citeauthoryear{Pater}{2008}]{pater08}
+Pater, Joe. 2008.
+\newblock Optimization and linguistic typology.
+\newblock Unpublished ms., Ms, University of Massachusetts, Amherst.
+
+\bibitem[\protect\citeauthoryear{Riggle}{2008}]{riggle08}
+Riggle, Jason. 2008.
+\newblock Counting rankings.
+\newblock In B.~Joseph (Ed.), {\em Proceedings of the Linguistic Society of
+  America}, Chicago, January.
+
+\bibitem[\protect\citeauthoryear{Riggle \bgroup et~al.\ \egroup
+  }{2007}]{riggle07}
+Riggle, Jason, Maximilian Bane, James Kirby, and Jeremy O'Brien. 2007.
+\newblock Efficiently computing {OT} typologies, January.
+\newblock Linguistic Society of America 2007 Annual Conference in Anaheim, CA.
+
+\bibitem[\protect\citeauthoryear{Tesar and Smolensky}{1993}]{tesar93}
+Tesar, Bruce, and Paul Smolensky. 1993.
+\newblock Learnability in optimality theory: an algorithm and some basic
+  complexity results.
+\newblock Unpublished ms., Available as ROA number 2.
+
+\end{thebibliography}

@@ -1,0 +1,2017 @@
+\documentclass[11pt]{article}
+\usepackage{robbib}
+\usepackage{pstricks}
+\usepackage{colortab}
+\usepackage{pifont}
+\usepackage[all]{xy}
+% \usepackage{tipa}
+\author{Nathan Sanders \\ \tt{ncsander@indiana.edu}}
+\title{Generation of Factorial Typologies in OT: Four Algorithms}
+\begin{document}
+\maketitle
+% TODO: Normalize capitalization of Optimality Theory
+% TODO: Explain harmonic bounding tree's time, exponential is worst
+% case if there isn't enough evidence.
+% TODO: note RCD's efficiency bounds (still missing)
+%%%%% nice but not necessary %%%%%
+% TODO: Define exponential and factorial and give examples. (For
+% Stuart)
+% TODO: Relate the execution of the algorithm to the code in the
+% figures. Or do that earlier in the explanation section.
+\section{Introduction}
+
+This paper explains four algorithms for the generation of factorial
+typologies in Optimality Theory (OT): naive factorial, bounded factorial,
+exponential Recursive Constraint Demotion and exponential
+r-volume. Factorial typologies are an important part of OT. When
+constructing an OT analysis, linguists use a factorial typology to
+check the predictions made by the relevant constraints. Candidate sets
+that are part of the factorial typology should be attested in at least
+one language of the world.  Conversely, candidate sets that are not
+part of the factorial typology can never win an optimality theoretic
+evaluation. Therefore, OT predicts that these candidate sets should
+not appear in any language.
+
+The naive factorial typology algorithm generates all factorial
+combinations of constraints and then evaluates them using OT's {\sc
+  Eval}. This approach is obvious and simple, but is not practical for
+use with large constraint sets. The naive factorial generation
+does not use any properties of OT to avoid unnecessary work on the
+part of {\sc Eval}.
+
+The bounded factorial algorithm starts from the naive one; it
+interleaves factorial generation and evaluation to avoid trying
+constraint hierarchies that will always produce the same winner
+set. Interleaving evaluation with generation means that evaluation can
+model creation of the constraint hierarchy as promotion. Evaluation is
+as a result incremental, unlike {\sc Eval}. The bounded factorial
+algorithm is inspired by the violation boundaries of
+\namecite{samek-lodovici02}; the bounded factorial call graph is
+identical to the violation boundary tree. This bounded factorial
+algorithm is presented for the first time in this paper. Like the
+naive algorithm, it has a worst-case factorial time bound, but the
+average-case time is much better because uninformative constraint set
+configurations can be skipped.
+
+The exponential Recursive Constraint Demotion algorithm is used in
+Hayes' OT-Soft \cite{hayes03}. It runs Recursive Constraint Demotion
+\cite{tesar93} on every candidate set--each configuration of the
+informative output candidates for each input. Recursive Constraint
+Demotion (RCD) will learn a constraint hierarchy consistent with some
+candidate set. However, it can be used as a consistency check since it
+will crash for inconsistent candidate sets for which no constraint
+hierarchy can be found. These inconsistent candidate sets are not part
+of the factorial typology.  This algorithm avoids the problem of
+generating all factorial combinations of constraints and has
+exponential time bounds in the number of candidate sets instead. To my
+knowledge, this is the first published analysis of this algorithm,
+although the algorithm is moderately well known and is referenced in
+other work such as \namecite{pater08} and used in other software such
+as Prince's OT Workplace.
+
+The exponential r-volume algorithm is based on \quotecite{riggle08}
+work on $r$-volumes. Riggle's algorithm to calculate $r$-volumes is
+similar to RCD but can terminate faster; it operates incrementally at
+the individual constraint level in a way similar to the bounded
+factorial algorithm. This algorithm,like Hayes', evaluates every
+candidate set, but since its core is the faster $r$-volume algorithm,
+it is correspondingly faster. Riggle first demonstrated the algorithm
+in a presentation to the Linguistic Society of America
+\cite{riggle07}.
+
+\subsection{Optimality Theory}
+Optimality theory is simple, formal model of decision making that
+consists of strictly ranked violable constraints \cite{prince93}. Its
+restricted computational power has made it attractive in the field of
+phonology, where its predictions are useful and its simplicity
+appropriate \cite{moreton96}. Although it is used most in the field of
+phonology, it has been applied to syntax as well. It is related to
+cognitive models such as neural nets, but is less powerful and
+builds more structure into the theory.
+
+OT consists of {\sc Input}, a set of words that make up a language
+$L$; {\sc Con}, a constraint hierarchy; {\sc Gen}, a function that
+takes an input form $i$ from {\sc Input} and produces a set of output
+candidates $C$; and {\sc Eval}, a function that maps the candidate set
+$C$ to a single winner output that, in phonology, is the pronounced
+form.
+
+The constraint hierarchy {\sc Con} is a list of constraints that
+specify the best output candidate from $C$. Each constraint is a
+function of two arguments: the input form and the output
+candidate. The constraint's output is the number of violations that
+the output candidate incurs. {\sc Eval} evaluates the constraints for
+each candidate in $C$ in the order specified by {\sc Con}. For each
+constraint, the optimal candidates, those with the lowest number of
+violations, are found. All candidates with a higher number of
+violations are removed. This process continues until all constraints
+in {\sc Con} have been evaluated or only one candidate remains. The
+remaining candidate is the winner.
+
+In standard OT analyses the process is usually captured and presented in a
+tableau. Each tableau gives the current input, a vertical listing of
+the output candidates, and a horizontal list of the constraint
+hierarchy. In the table to the right of the output candidates, each
+constraint violation for a candidate is marked with a star. The
+point that {\sc Eval} eliminates a candidate is marked
+with an exclamation point. Since {\sc Eval} does not need to consider
+this candidate further, the background is grey, although
+violations are still marked. Tableau \ref{tableau-costus} is an
+example that will be used throughout the paper.
+
+\begin{table}
+\begin{tabular}{|rrl||c|c|c|c|c|}\hline
+\multicolumn{3}{|c||}{/cost\#us/} & {\sc *Complex} & {\sc Onset} & {\sc Align-L-W} & {\sc Align-R-P} & {\sc Parse} \\ \hline\hline
+\LCC
+& &  & &\lightgray &\lightgray &\lightgray &\lightgray \\ \hline
+ a. &  & cost.us & *! & * &  &  & \\ \hline
+\ECC
+\LCC
+& &  &  & &\lightgray &\lightgray &\lightgray \\ \hline
+ b. &  & cos.us &  & *! &  &  & *\\ \hline
+\ECC
+\LCC
+& &  &  & &\lightgray &\lightgray &\lightgray \\ \hline
+ c. & \ding{43} & cos.tus &  &  & * &  & \\ \hline
+\ECC
+\end{tabular}
+  \caption{Tableau for /cost\#us/}
+  \label{tableau-costus}
+\end{table}
+
+\subsubsection{Algorithm}
+
+Before giving an implementation of the evaluation algorithm, data
+structures are needed to model the various parts of OT explained
+above. These data structures are given in figure
+\ref{haskell-types}. The most important type is unsurprisingly {\tt
+  Tableau}, which pairs a list of constraints with a list of
+rows. Each row pairs a candidate with its violations stored as
+integers. However, two other representations of tableaux are
+useful. {\tt CandTableau} stores violations in columns instead of
+rows. An translation of tableau \ref{tableau-costus} to {\tt
+  CandTableau} form is given in figure \ref{haskell-costus}.
+{\tt ConTableau} is a relative tableau \cite{prince02}, also
+column-major. Relative tableaux store relative violations instead of
+integer violations; relative violations are modeled with the type
+{\tt Erc}: Elementary Ranking Conditions, which specify only whether
+constraint favors the desired winner, a loser, or neither.
+
+\begin{figure}
+\begin{verbatim}
+type Tableau = ([Constraint], [Row])
+type CandTableau = ([Candidate], [[Int]])
+type ConTableau = [Column]
+
+data ERC = L | E | W deriving (Eq, Ord, Show, Read)
+type Constraint = String
+type Candidate = String
+type Column = (Constraint, [ERC])
+type Row = (Candidate, [Int])
+\end{verbatim}
+
+  \caption{Haskell data types for OT}
+  \label{haskell-types}
+\end{figure}
+
+\begin{figure}
+  \begin{verbatim}
+ (["cost.us", "cos.us", "cos.tus"],
+  [[1,0,0],
+   [1,1,0],
+   [0,0,1],
+   [0,0,0],
+   [0,1,0]]) :: CandTableau
+\end{verbatim}
+  \caption{Haskell value for /cost\#us/ tableau}
+  \label{haskell-costus}
+\end{figure}
+
+An implementation of the evaluation algorithm is given in figure
+\ref{eval-algorithm}. The input is a column-major {\tt CandTableau}.
+This representation requires all candidates to be
+specified and constraint violations assessed; the role of {\sc Gen} is
+played by the linguist. An online version of OT with interacting {\sc
+  Gen} and {\sc Eval} is beyond the scope of this paper; see
+\quotecite{heiberg99} dissertation for an implementation.
+
+{\tt eval} takes a column-major {\tt CandTableau}. If all
+constraints have been evaluated, then all the remaining candidates should
+be winners. However, this implementation assumes that there is exactly one winner and
+ignores the rest. If there are still constraints to evaluate, the
+algorithm removes nonoptimal candidates in {\tt promote} and looks at the
+next constraint.
+
+\begin{figure}
+\begin{verbatim}
+eval :: CandTableau -> Candidate
+eval (cands, []) = head cands
+eval (cands, col:cols) = eval (promote cands (col,cols))
+
+promote :: [Candidate] -> ([Int],[[Int]]) -> CandTableau
+promote cands (col,cols) = (filterLosers cands,map filterLosers cols)
+    where filterLosers = filterProxy (==minimum col) col
+
+filterProxy p proxy l = map fst (filter (p . snd) (zip l proxy))
+\end{verbatim}
+  \caption{ {\sc Eval} implementation}
+  \label{eval-algorithm}
+\end{figure}
+
+{\tt promote} is relatively simple. It finds the minimum violation for the
+current constraint column and removes all nonoptimal candidates
+and their associated violation rows. This removal corresponds
+precisely to those violations marked with an exclamation point in a
+standard OT tableau, such as tableau \ref{tableau-costus}. Those rows
+will not be evaluated for succeeding constraints, meaning that the
+shaded cells of standard tableaux are exactly those eliminated, with
+the exception of the winner's row. All constraints are evaluated for
+the winner. However, adding the line {\tt eval ([cand], cols) = cand}
+to the beginning of the current code will allow evaluation to finish
+when only one winner remains, matching the grayed cells exactly.
+
+\subsubsection{Example}
+
+To illustrate factorial typology, \namecite{anttila06} use t-deletion
+in English. I will use a subset of their exposition to illustrate {\sc
+  Eval} in OT.  t-deletion in English varies quite a bit between
+different dialects of the language. For example, /cost\#us/ may be
+produced as [cost.us] or [cos.us]. \namecite{anttila06} analyze the
+factorial typology of this deletion, matching dialect with deletion
+pattern and frequency. Their analysis will serve as the basis of a
+running factorial typology example throughout this paper.
+
+/t/ deletes more
+often in some phonological contexts than others. Across all
+dialects, /t/ is most likely to delete before a consonant and least
+likely before a vowel; word-final deletion is intermediate.
+There are five constraints necessary to model
+t-deletion, given in table \ref{cost-constraints}. Examples of
+satisfaction and violation of the constraints are given in
+\ref{cost-constraints-example}. {\sc Align-Left-Word} and {\sc
+  Align-Right-Phrase} are hereafter abbreviated {\sc Align-L-P} and
+{\sc Align-R-P}, respectively.
+
+\begin{table}
+\begin{tabular}{l|l}
+  {\sc *Complex} & Avoid consonant clusters within a syllable \\
+  {\sc Onset} & Every syllable must have an onset \\
+  {\sc Align-Left-Word} & Output syllables cannot straddle underlying word
+  boundaries \\
+  {\sc Parse} & Every underlying segment must appear in the output \\
+  {\sc Align-Right-Phrase} & Phrase-final input consonants must be syllable-final in the output \\
+\end{tabular}
+\caption{t-deletion constraints}
+\label{cost-constraints}
+\end{table}
+
+\begin{table}
+  \begin{tabular}{lr|l}
+    {\sc *Complex}(/cost\#us/, [cost.us]) & * & The final [st] cluster
+    is complex \\
+    {\sc *Complex}(/cost\#us/, [cos.us]) & $\surd$ & /t/ deletes,
+    simplifying the word-final cluster to [s] \\ \hline
+    {\sc Onset}(/cost\#us/, [cos.us]) & * & [us] has no onset. \\
+    {\sc Onset}(/cost\#us/, [cos.tus]) & $\surd$ & /t/ resyllabifies
+    as the onset of [tus] \\ \hline
+    {\sc Align-L-W}(/cost\#us/, [cos.tus]) & * & [cos.t] is not
+    aligned with syllable boundaries \\
+    {\sc Align-L-W}(/cost\#us/, [cos.us]) & $\surd$ & t-deletion realigns
+    [cos] with /cost/ \\ \hline
+    {\sc Parse}(/cost\#us/, [cos.us])& * & Input segment /t/ does not appear in the
+    output \\
+    {\sc Parse}(/cost\#us/, [cos.tus]) & $\surd$ & \\ \hline
+    {\sc Align-R-P}(/cost/, [cos]) & * & Phrase-final /t/ does not
+    end the syllable \\
+    {\sc Align-R-P}(/cost/, [cost]) & $\surd$ & \\ \hline
+  \end{tabular}
+  \caption{Constraint evaluation examples}
+  \label{cost-constraints-example}
+\end{table}
+
+Given the above input /cost\#us/ and the constraints from table
+\ref{cost-constraints}, tableau (1) of figure
+\ref{tableau-costus-eval} is the starting point for {\sc Eval}. {\sc Eval} first
+evaluates {\sc *Complex}, eliminating [cost.us] and its
+row since [cost.us] is suboptimal for {\sc *Complex}.
+{\sc Eval} moves to {\sc Onset} In step (2). This eliminates
+[cos.us]. Notice that even though [cost.us] also has a violation of {\sc Onset},
+it not evaluated because it has already been eliminated. If {\sc Eval}
+is enhanced with the early exit clause mentioned above, the algorithm is
+complete and [cos.tus] is the winner. Otherwise, the remaining
+constraints will evaluate only [cos.tus]. Since it trivially has the
+minimum constraint violation of its singleton set, it will be the
+winner for the remaining constraints.
+
+\begin{figure}
+  \begin{enumerate}
+    \item Evaluate {\sc *Complex} \\
+      
+      \begin{tabular}{|rrl||c|c|c|c|c|}\hline
+\multicolumn{3}{|c||}{/cost\#us/} & {\sc *Complex} & {\sc Onset} & {\sc Align-L-W} & {\sc Align-R-P} & {\sc Parse} \\ \hline\hline
+\LCC
+\lightgray&\lightgray &\lightgray  &\lightgray &\lightgray &\lightgray &\lightgray &\lightgray \\ \hline
+ a. &  & cost.us & *! & * &  &  & \\ \hline
+\ECC
+ b. &  & cos.us &  & * &  &  & *\\ \hline
+ c. &  & cos.tus &  &  & * &  & \\ \hline
+\end{tabular}
+\item Evaluate {\sc Onset} \\
+  
+  \begin{tabular}{|rrl||c|c|c|c|}\hline
+\multicolumn{3}{|c||}{/cost\#us/}  & {\sc Onset} & {\sc Align-L-W} & {\sc Align-R-P} & {\sc Parse} \\ \hline\hline
+\LCC
+\lightgray&\lightgray &\lightgray  &\lightgray  &\lightgray &\lightgray &\lightgray \\ \hline
+ b. &  & cos.us  & *! &  &  & *\\ \hline
+\ECC
+ c. &  & cos.tus  &  & * &  & \\ \hline
+\end{tabular}
+\item Evaluate {\sc Align-L-W} (and {\sc Align-R-P} and {\sc Parse}) \\
+  
+  \begin{tabular}{|rrl||c|c|c|}\hline
+\multicolumn{3}{|c||}{/cost\#us/}   & {\sc Align-L-W} & {\sc Align-R-P} & {\sc Parse} \\ \hline\hline
+ c. & \ding{43} & cos.tus  & * &  & \\ \hline
+\end{tabular}
+\end{enumerate}
+  \caption{Execution of {\sc Eval}}
+  \label{tableau-costus-eval}
+\end{figure}
+
+This single-input definition of {\sc Eval} extends straightforwardly
+to sets of input forms. {\sc Eval} of multiple inputs is needed to
+produce a factorial typology, which necessarily involves enumerating
+multiple winner sets from an set of inputs.
+
+\subsection{Factorial Typology}
+
+The example above finds the winner for a single input and a single
+constraint ranking. In contrast, a factorial typology takes a set of
+inputs and returns all sets of winner for all permutations of the
+constraint set. Factorial typologies are important in linguistic
+analyses because they add an additional level of certainty to the
+possibility space that is considered.  The typical Optimality
+Theoretic analysis is different from earlier analyses because it
+enumerates many possible output candidates for an input form and
+explains why only the winner surfaces.  A factorial typology expands
+on this analysis by looking at possible constraint hierarchies in which other
+candidates can win.
+
+An incorrect constraint set can overgenerate and produce a factorial
+typology with winner sets that are unattested in any language. Or it
+can undergenerate and the factorial typology will lack winner sets
+that are attested in neighboring languages. In OT, just as changing the
+posited input form means that the candidates need to be re-evaluated,
+changing the relevant constraint set means that the factorial typology
+needs to be re-evaluated.
+
+In the t-deletion example given by
+\namecite{anttila06}, the input set is \{/cost/, /cost\#us/,
+/cost\#me/\}. The full factorial typology is given in figure
+\ref{cost-typology}. Anttila and Andrus identify
+dialects of English that match these six variants; for example, the
+set \{[cos.tus], [cos.me], [cost]\} appears in Tejano English of San
+Antonio.
+
+\begin{figure}
+  \begin{enumerate}
+    \item \{[cost.us], [cost.me], [cost]\}
+    \item \{[cos.us], [cos.me], [cost]\}
+    \item \{[cos.us], [cos.me], [cos]\}
+    \item \{[cos.tus], [cost.me], [cost]\}
+    \item \{[cos.tus], [cos.me], [cost]\}
+    \item \{[cos.tus], [cos.me], [cos]\}
+  \end{enumerate}
+  \caption{T-deletion factorial typology}
+  \label{cost-typology}
+\end{figure}
+
+Besides pointing out variations that should be attested for
+neighboring dialects and languages, a factorial typology exposes two
+additional structural properties of the data. First, multiple
+constraint orders can generate the same winner set. These orders can
+be directly captured by other algorithms covered later in the paper;
+for a factorial typology the important point is that the typology is
+much smaller than the full permutation of the constraint set. For
+example, there are only six winner sets in the t-deletion factorial
+typology, even though there are $5!=120$ permutations of the
+constraint set.
+
+Second, global phonological patterns can be extracted from a factorial
+typology. Phonological processes occur in
+different contexts in the factorial typology; some combinations of
+deletion never occur. For example, t-deletion in English dialects
+occurs in the following contexts:
+
+\begin{enumerate}
+\item Nowhere
+\item Before a consonant
+\item Before a consonant or a vowel
+\item Before a consonant or a word ending
+\item Before a consonant, vowel or word ending
+\end{enumerate}
+
+Some combinations are impossible; there is no dialect with
+deletion only before vowels. While some combinations are obvious to a
+linguist, not all are. The complete factorial typology may contain some surprising
+entries. The typology does not is a necessary result of the constraints, the input
+forms and the rules by which OT combines them. There is no creative
+work required of the linguist.
+
+Building on this, patterns can be found between members of the
+factorial typology. For example, all dialects that delete /t/
+word-finally also delete it before a consonant. All dialects that
+delete /t/ prevocalically also delete it before a consonant. However,
+there is prevocalic t-deletion will never predict whether or not the
+dialect also has word-final t-deletion, and vice
+versa. \namecite{anttila06} give an algorithm to automatically find
+these implicational universals, calling them t-orders. T-orders, too,
+are a necessary result of the inputs and structure of OT.
+
+\subsection{Naive Algorithm}
+
+The naive algorithm for finding a factorial typology is fairly
+simple. It must run {\sc Eval} in parallel for the input sets and
+candidate sets for all permutations of the constraint set. Equation
+\ref{naive-factorial} gives a formal definition. Figure
+\ref{naive-factorial-haskell} gives a more complicated and efficient Haskell
+implementation. The code should be straightforward except for the
+functions \verb+nub . transpose+ which run at the end. {\tt transpose}
+takes the winners for each input and transposes them into winner sets,
+after which {\tt nub} eliminates duplicate winner sets.
+
+\begin{equation}
+permute(C)= \{x+xs | x \in C, xs \in permute(C - x) \}
+  %\caption{Naive Factorial}
+  \label{naive-factorial}
+\end{equation}
+\begin{equation}
+\{\textrm{\sc Eval}(I, C) | C \in permute(\textrm{\sc Con}) \}
+  %\caption{Naive Factorial}
+  \label{naive-factorial2}
+\end{equation}
+\begin{figure}
+\begin{verbatim}
+naive :: [Tableau] -> [[Candidate]]
+naive = nub . transpose . map (map eval . factorial . colify)
+    where factorial (cands,cols) = map ((,) cands) . permute $ cols
+          colify :: Tableau -> CandTableau
+          colify (_, rows) = (map fst rows, transpose (map snd rows))
+
+permute :: [t] -> [[t]]
+permute [] = [[]]
+permute l = [x:ys | (x,xs) <- extractions l, ys <- permute xs]
+
+extractions :: [t] -> [(t, [t])]
+extractions l = extract l []
+    where extract [] _ = []
+          extract (x:xs) prev = (x, prev++xs) : extract xs (x : prev)
+\end{verbatim}
+  \caption{Naive factorial algorithm}
+  \label{naive-factorial-haskell}
+\end{figure}
+
+\section{Previous Work}
+
+Although the naive algorithm is simple, its running time is always
+factorial in the size of the constraint set. Faster algorithms are considerably more
+complicated and draw on much related work in computational OT, such as
+learning algorithms and algorithms that generate all relevant outputs
+for an input candidate.
+
+  \subsection{Recursive Constraint Demotion}
+\label{rcd}
+
+  The Recursive Constraint Demotion algorithm (RCD) is not obviously
+applicable to generation of factorial typologies. RCD is a learning
+algorithm used to produce a constraint ranking consistent
+with training evidence in the form of input/output pairs. For each
+input, one output is labeled the winner, and constraints are
+recursively demoted until all of the winner's violations are dominated by
+worse violations of some loser.
+
+% % This is so awesome but I'm not sure it's appropriate so early. Oh well.
+% The two properties of RCD that Hayes uses to generate a factorial typology
+% are (1) evidence from multiple inputs can be combined so long as the
+% desired winner for each input is known (2) RCD will crash if there is no
+% consistent ranking possible. Together, these two properties mean that
+% you can combine evidence by choosing an arbitrary winner set and pairing it
+% with its input set, and RCD will quickly tell you if this winner set
+% leads to a contradiction. If it does, it cannot be produced and
+% therefore cannot be part of the factorial typology.
+
+Let us define Recursive Constraint Demotion precisely and give an
+example.  Note: the definition given here allows for multiple
+constraints per stratum instead of a strictly ranked constraint
+hierarchy with one constraint per stratum. This means that every
+multi-constraint stratum stands for all rankings derived from
+permutations of the stratum. For example, a stratum with three
+constraints, $C, D, E$, actually stands for six possible constraint
+rankings. The training does not indicate which hierarchy is the
+correct one, so RCD does not attempt to guess.
+
+\subsubsection{ERCs}
+RCD depends heavily on Elementary Ranking Conditions
+(ERCs). \namecite{prince02} gives an extensive explanation of ERCs and
+their use in grounding OT in logic. \namecite{mccarthy02} points out
+that comparative tableaux, based on ERCs, are useful in OT analyses to
+ensure that the observed output form is actually favored by the
+proposed constraint hierarchy and not accidentally bounded by a
+candidate that actually loses. Comparative tableaux make this property
+more obvious by representing it explicitly.
+
+An ERC is a vector whose values, unlike rows in an OT tableau, are not
+integers but values in a three-valued logic: W, L and $e$. Converting
+a row in an OT tableau to an ERC is straightforward; see equation
+\ref{normal-to-erc}, following the definition from
+\namecite{riggle08}. An ERC makes it very obvious whether the
+violation profile of an output candidate supports or contradicts evidence for
+the winning output.
+
+\begin{equation}
+  erc(a\sim b) = <\alpha_1,\ldots,\alpha_k>
+  \textrm{where}     \left\{\begin{array}{rrl}
+      \alpha_i = &\textrm{ {\sc W} if } &C_i(a) < C_i(b) \\
+      \alpha_i = &\textrm{ {\sc L} if } &C_i(a) > C_i(b) \\
+      \alpha_i = &\textrm{ {\it e} if } &C_i(a) = C_i(b) \\
+    \end{array}\right.
+  \label{normal-to-erc}
+\end{equation}
+
+Equation \ref{normal-to-erc} defines a function $erc$ that takes a
+winning candidate $a$ that defeats candidate $b$. $C_i$ gives the
+number of constraint violations for some constraint $C_i$ in {\sc
+  Con}. For example, the two-candidate absolute tableau
+\ref{erc-abs-tab} become the single-ERC comparative tableau
+\ref{erc-cmp-tab}. Since [cos.tus] has fewer violations of {\sc Onset}
+than [cos.us], it is the winning candidate. This is reflected in the
+ERC as a W. However, [cos.us] has fewer violations on {\sc Align-L-W},
+so the ERC has an L here. Finally, both candidates have the same
+number of violations (zero) for {\sc Align-R-P}, so this cell of the
+ERC is $e$. In figure \ref{haskell-normal-to-erc}, the Haskell
+implementation converts an entire tableau to a comparative tableau,
+given a row that has been specified as the winner.
+
+\begin{table}[h]
+  \begin{tabular}{|rrl||c|c|c|c|}\hline
+\multicolumn{3}{|c||}{/cost\#us/}  & {\sc Onset} & {\sc Align-L-W} & {\sc Align-R-P} & {\sc Parse} \\ \hline\hline
+ a. & \ding{43} & cos.tus  & & * &  & \\ \hline
+ b. &  & cos.us  & *! &  &  &* \\ \hline
+\end{tabular}
+  \caption{Two-candidate absolute tableau}
+  \label{erc-abs-tab}
+\end{table}
+
+\begin{table}[h]
+  \begin{tabular}{|c||c|c|c|c|}\hline
+/cost\#us/  & {\sc Onset} & {\sc Align-L-W} & {\sc Align-R-P} & {\sc Parse} \\ \hline\hline
+  [cos.tus $\sim$ cos.us]  & W & L & $e$ & W \\ \hline
+\end{tabular}
+  \caption{Single-ERC comparative tableau}
+  \label{erc-cmp-tab}
+\end{table}
+
+Notice that some W must dominate every L in the vector. This
+`some-dominates-every' pattern
+is repeated throughout OT and appears in many OT algorithms.
+ERCs are quite useful because they incorporate
+context: they compare some losing candidate to the winning
+output. Since the output is implicit, ERCs created from multiple
+tableaux in the same language can be combined into a single large
+comparative tableau. A Haskell implementation of this is given in
+figure \ref{haskell-erc-merge}.
+
+\begin{figure}
+\begin{verbatim}
+comparative :: (Row,Tableau) -> (Candidate,ConTableau)
+comparative ((cand,viols),(con,tab)) =
+    (cand, zip con (transpose . map (sub viols) . snd . unzip $ tab))
+    where sub row1 row2 = map classify (zipWith (-) row1 row2)
+          classify n | n < 0 = W
+                     | n > 0 = L
+                     | otherwise = E
+\end{verbatim}
+  \caption{Create a comparative tableau from an absolute one}
+  \label{haskell-normal-to-erc}
+\end{figure}
+
+\begin{figure}
+\begin{verbatim}
+combine :: [(Candidate,ConTableau)] -> ConTableau
+combine extracted =
+    zip (map fst cols) (map concat . transpose . map (map snd) $ allcols)
+    where allcols@(cols:_) = map snd extracted
+\end{verbatim}  
+  \caption{Merge comparative tableau}
+  \label{haskell-erc-merge}
+\end{figure}
+
+\subsubsection{RCD Algorithm}
+
+\namecite{tesar93} and \namecite{tesar98} give the RCD algorithm in a
+context of supervised OT learning.  In supervised learning, the
+winning form for some input is given. The learner just has to reorder
+the constraint hierarchy so that the output form is also the
+winner. Given the `some-dominates-every' pattern above, the basic
+learning strategy should be obvious. If the output form is not the
+winner, constraints that favor the loser must be demoted. In other
+words, every ERC cell containing L must be moved to the right of a
+cell containing a W.
+
+RCD chooses to be conservative. Even though each L only needs to
+be dominated by a single W, it demotes constraints containing Ls past all
+constraints containing a W. This does not produce a strict domination
+hierarchy: it has multi-constraint strata. But the algorithm does not
+have to choose the best constraint to promote because it promotes all
+of them.
+
+The second step of RCD is to remove the losing candidates that are
+eliminated by the most recent demotion. The candidates
+for which all Ls are now dominated by some W can be removed since they
+can no longer win. Then, with these candidates removed, the recently
+promoted constraints are no longer informative---they only serve to
+dominate the just-eliminated losers--and can be removed as
+well.
+
+Now the process recurs on the remaining constraints until there are no
+more constraints to demote. Alternatively, RCD can crash if not enough
+promotable constraints can be found to dominate the loser-favoring
+candidates. In this case, the winner set is inconsistent and can not
+appear in the factorial typology. Since at least one constraint must
+be promoted at each step, the time bound for RCD is $O(n^2)$, or more
+precisely $(k^2 - k) / 2$ for $k$ constriants, according to
+\namecite{tesar93}.
+
+For example, consider the constraint demotion of the combined tableaux
+for the inputs /cost\#us/ and /cost\#me/ with the outputs [cost.us]
+and [cost.me]. The original tableaux are given in table
+\ref{tableau-costus-costme}. The combined comparative tableau is given
+in table \ref{tableau-cmp-costus-costme}. The current constraint
+hierarchy incorrectly specifies \{[cos.tus], [cos.me]\} as the winner
+set, not \{[cost.us], [cost.me]\}, so before RCD can run, a
+comparative tableau must be created with \{[cos.tus], [cost.me]\} as
+the desired winner set.
+
+\begin{table}
+\begin{tabular}{|rrl||c|c|c|c|c|}\hline
+\multicolumn{3}{|c||}{/cost\#us/} & {\sc *Complex} & {\sc Onset} & {\sc Align-L-W} & {\sc Align-R-P} & {\sc Parse} \\ \hline\hline
+\LCC
+& &  & &\lightgray &\lightgray &\lightgray &\lightgray \\ \hline
+ a. & $\times$ & cost.us & *! & * &  &  & \\ \hline
+\ECC
+\LCC
+& &  &  & &\lightgray &\lightgray &\lightgray \\ \hline
+ b. &  & cos.us &  & *! &  &  & *\\ \hline
+\ECC
+\LCC
+& &  &  & &\lightgray &\lightgray &\lightgray \\ \hline
+ c. & \ding{43} & cos.tus &  &  & * &  & \\ \hline \hline
+\ECC
+\multicolumn{3}{|c||}{/cost\#me/} &  &  & & &  \\ \hline\hline
+\LCC
+& &  & &\lightgray &\lightgray &\lightgray &\lightgray \\ \hline
+ d. & $\times$  & cost.me & *! &  &  &  & \\ \hline
+\ECC
+\LCC
+& &  &  &\lightgray &\lightgray &\lightgray &\lightgray \\ \hline
+ e. & \ding{43} & cos.me &  &  &  &  & *\\ \hline
+\ECC
+\LCC
+& &  &  &\lightgray &\lightgray &\lightgray &\lightgray \\ \hline
+ f. &  & cos.tme & *! &  & * &  & \\ \hline
+\ECC
+\end{tabular}
+  \caption{Tableaux for /cost\#us/ and /cost\#me/}
+  \label{tableau-costus-costme}
+\end{table}
+
+\begin{table}
+\begin{tabular}{|rc||c|c|c|c|c|}\hline
+ && {\sc *Complex} & {\sc Onset} & {\sc Align-L-W} & {\sc Align-R-P} & {\sc Parse} \\ \hline\hline
+ %a. & cost.us & *! & * &  &  & \\ \hline
+ a. & [cost.us $\sim$ cos.us] & L & $e$ &$e$  &$e$  & W\\ \hline
+ b. & [cost.us $\sim$ cos.tus] &L &L & W &$e$ &$e$\\ \hline
+ %d. &  & cost.me & *! &  &  &  & \\ \hline
+ c. & [cost.me $\sim$ cos.me] &L &$e$ &$e$ & $e$& W\\ \hline
+ d. & [cost.me $\sim$ cos.tme] & $e$ &$e$ & W &$e$ &$e$\\ \hline
+\end{tabular}
+  \caption{Comparative tableau for [cost.us] and [cost.me]}
+  \label{tableau-cmp-costus-costme}
+\end{table}
+
+The first step of RCD is to find all constraints with Ls
+and demote them. For table \ref{tableau-cmp-costus-costme}, this is
+{\sc *Complex} and {\sc Onset}. Then the remaining constraints, {\sc
+  Align-L-W}, {\sc Align-R-P} and {\sc Parse}, are promoted to the
+first stratum and
+dominated losers removed. For this tableau, {\sc Align-R-P}
+dominates no losers, but the other two constraints remove the rest of
+the candidates because each contributes two Ws. Since the tableau is
+now empty, the constraints trivially have no Ls, and are all
+promoted to the next stratum. No constraints remain to demote, so the final
+ranking is \{{\sc Align-L-W, Align-R-P, Parse} $\gg$ {\sc *Complex,
+  Onset}\}.
+
+\begin{table}
+\begin{tabular}{|rc||c|c|c|c|c|}\hline
+ && {\sc *Complex} & {\sc Onset} & {\sc Align-L-W} & {\sc Align-R-P} & {\sc Parse} \\ \hline\hline
+ a. & [cos.us $\sim$ cost.us] & W & $e$ &$e$  &$e$  & L\\ \hline
+ b. & [cos.us $\sim$ cos.tus] &$e$ &L & W &$e$ &L\\ \hline
+ c. & [cost.me $\sim$ cos.me] &L &$e$ &$e$ & $e$& W\\ \hline
+ d. & [cost.me $\sim$ cos.tme] & $e$ &$e$ & W &$e$ &$e$\\ \hline
+\end{tabular}
+  \caption{Comparative tableau for [cos.us] and [cost.me]}
+  \label{tableau-cmp-cosus-costme}
+\end{table}
+
+Of course, combining tableaux can produce an inconsistent tableau. The
+outputs [cost.us] and [cos.me], for example, lead to an inconsistency in
+which no constraints can be found for promotion because the
+constraints containing a W all have an L somewhere as well. The
+comparative tableau is given in table \ref{tableau-cmp-cosus-costme}.
+RCD starts promisingly enough; {\sc *Complex, Onset} and {\sc Parse}
+all contain at least one L and must be demoted. That leaves {\sc
+  Align-L-W} and {\sc Align-R-P} to be promoted; the Ws in {Align-L-W}
+remove candidates (b) and (d), giving the smaller tableau
+\ref{tableau-cmp-cosus-costme-2}.
+
+\begin{table}
+\begin{tabular}{|rc||c|c|c|}\hline
+ && {\sc *Complex} & {\sc Onset} & {\sc Parse} \\ \hline\hline
+ a. & [cos.us $\sim$ cost.us] & W & $e$   & L\\ \hline
+ c. & [cost.me $\sim$ cos.me] &L &$e$ & W\\ \hline
+\end{tabular}
+  \caption{Comparative tableau for [cos.us] and [cost.me]}
+  \label{tableau-cmp-cosus-costme-2}
+\end{table}
+
+It is already obvious that we have arrived at a contradiction, but RCD
+will continue for one more iteration because {\sc Onset} has no
+violations; {\sc *Complex} and {\sc Parse} will be demoted. However,
+since {\sc Onset} contributes no Ws, no candidates are
+eliminated. This gives tableau \ref{tableau-cmp-cosus-costme-3}.
+
+\begin{table}
+\begin{tabular}{|rc||c|c|}\hline
+ && {\sc *Complex} & {\sc Parse} \\ \hline\hline
+ a. & [cos.us $\sim$ cost.us] & W    & L\\ \hline
+ c. & [cost.me $\sim$ cos.me] &L  & W\\ \hline
+\end{tabular}
+  \caption{Comparative tableau for [cos.us] and [cost.me]}
+  \label{tableau-cmp-cosus-costme-3}
+\end{table}
+
+Again both {\sc *Complex} and {\sc Parse} are demoted, but there are
+no constraints left to dominate them, and empty strata are not part of
+OT, so RCD crashes with the incomplete hierarchy \{{\sc Align-L-W,
+  Align-R-P} $\gg$ {\sc Onset} $\gg$ \}. The crash means that the
+winner set \{[cos.us], [cost.me]\} is inconsistent with this
+constraint set and will never appear in any language.
+
+It is this inconsistency check that is useful for generation of
+factorial typology; inconsistent winner sets cause RCD to crash and
+can be removed from the factorial typology. The Haskell version of an
+RCD consistency check is given in figure \ref{haskell-rcd}. Note that
+this algorithm is a consistency check only; it does not return the
+constraint hierarchy. The two important functions are {\tt rcd}
+itself, which finds constraints with undominated Ls, and the operator
+$\backslash$*$\backslash$, which removes dominated candidates from
+consideration.
+
+\begin{figure}
+\begin{verbatim}
+rcd :: ConTableau -> Bool
+rcd cols = case partition (any (==L) . snd) cols of
+               (_,[]) -> False
+               ([],_) -> True
+               (demote,promote) -> rcd (demote \*\ promote)
+( \*\ ) :: ColTableau -> ColTableau -> ColTableau
+demote \*\ promote = alwaysZip titles (transpose filtered)
+    where titles = map fst demote
+          vlns = transpose (map snd demote)
+          filtered = filterProxy (all (==E)) (transpose (map snd
+promote)) vlns
+
+alwaysZip first second = zip first (if second==[] then repeat [] else second)
+filterProxy p proxy l = map fst (filter (p . snd) (zip l proxy))
+\end{verbatim}
+  \caption{RCD implementation}
+  \label{haskell-rcd}
+\end{figure}
+
+\subsection{Riggle's R-Volumes}
+
+\quotecite{riggle08} r-volume is quite similar RCD--both operate on a comparative tableau
+that has had a winner set specified. RCD gives the minimally specific
+constraint ranking for a winner set if such a ranking exists. The
+r-volume is the number of possible constraint rankings that are
+consistent with the winner set. The result can be obtained from RCD's
+constraint ranking by finding the product of the factorial of the size
+of each stratum. Riggle's algorithm finds the r-volume directly. This
+gives less information than RCD but has a time bound of $k \log_2 k$
+instead of $(k^2 - k) / 2$.
+
+\subsubsection{R-Volume Algorithm}
+\label{r-volume}
+
+Like RCD, the input to the r-volume algorithm is an ERC set of
+winners, a comparative tableau. After the winner for each tableau is
+chosen, the ERCs are created by comparing the losers to the winner.
+
+The central idea of the algorithm is to divide each tableau into subtableau
+ and multiply the number of valid rankings from each
+subtableau to find the total. There are two base cases in this recursive definition. If
+any violation in a column favors a loser, then that constraint
+contributes no rankings to the r-volume. If all violations in a column
+favor the winner, that column contributes $(k-1)!$ rankings.
+
+The reasoning for the base cases is not immediately obvious.  Each
+all-W constraint column gives $(k-1)!$ possibilities because this
+constraint can safely be ranked above the other constraints and result
+in a consistent tableau--it favors the winner on every row. Since there
+are $k$ constraints, there are $(k-1)!$ ways to rank the other
+constraints below the all-W one.  Similarly, there are zero ways
+that a constraint containing a loser can be ranked above the other
+constraints and produce a consistent tableau. With this in mind, the
+recursive removal step serves to narrow the possible rankings in
+precisely the way as the promotion step of RCD. The removal step also
+promotes the candidates and continues ranking the rest of the
+tableau. However, r-volume's removal step operates on a single
+constraint, unlike RCD's demotion step. Since it does less work at one
+time, it can avoid more unnecessary work.
+
+\begin{equation}
+  r(E^k) = \sum_{0\leq{}i\leq{}k} \left\{
+    \begin{array}{ll}
+      0 & \textrm{if } \alpha_i = \textrm{{\sc L} for any }
+      \alpha \in E \\
+      (k-1)! & \textrm{if } \alpha_i = \textrm{{\sc W} for every }
+      \alpha \in E \\
+      r(E-w_i) & \textrm{otherwise} \\
+    \end{array} \right.
+  \label{r-volume-recursive}
+\end{equation}
+
+Equation \ref{r-volume-recursive} gives the base case followed by the
+recursive case, which finds the product of the r-volumes from
+subtableaux. Here, $E^k$ is a comparative tableau in which the ERCs
+are of length $k$; in other words, there are $k$ constraints. $E -
+w_i$ removes ERCs from $E$ with {\sc W} in the $i$-th coordinate and
+deletes the $i$-th coordinate from the remaining ERCs. This removal
+step is quite similar to the promotion step in RCD.
+
+To see the r-volume algorithm in action, start with tables
+\ref{tableau-costus-costme} and \ref{tableau-cmp-costus-costme}, the
+same data used in the RCD example. Extracting just the ERCs from
+tableau \ref{tableau-cmp-costus-costme} gives the root of figure
+\ref{r-volume-costus-costme}. The constraint names are no
+longer important, so they are not shown to save space.
+
+\begin{figure}
+  \[ \xymatrix{
+% first row
+&*+[F]{\begin{array}{c|rcccl}
+ a&L &e &e  &e  & W\\
+ b&L &L & W &e & e\\
+ c&L &e & e &e & W\\
+ d&e &e & W &e & e\\ \hline
+ \sum&0 & 0 & 12 & 5 & 8 \\ \hline
+ =&&&&& 25 \\
+  \end{array}} \ar@{-}[d]\ar@{-}[dl]\ar@{-}[dr]
+& \\
+% second row
+*+ [F]{\begin{array}{c|cccl}
+ a&L &e &e  & W\\
+c& L &e &e & W\\ \hline
+\sum& 0 & 3 & 3 & (4-1)! \\ \hline
+=&&&&12 \\
+\end{array}}\ar@{=}[d]
+&*+[F]{
+\begin{array}{c|cccl}
+ a&L &e &e   & W\\
+ b&L &L & W & e\\
+ c&L &e & e & W\\
+ d&e &e & W & e\\ \hline
+ \sum&0 & 0 & 3 & 2 \\ \hline
+ =&&&& 5 \\
+\end{array}}\ar@{-}[dl]\ar@{-}[dr]
+&*+[F]{
+\begin{array}{c|cccl}
+ b&L &L & W &e \\
+ d&e &e & W &e \\ \hline
+ \sum&0 & 0 & (4-1)! & 2 \\ \hline
+ =&& & & 8 \\
+\end{array}}\ar@{-}[d]\\
+% third row (3- children)
+*+ [F]{\begin{array}{c|ccl} %3-2 == 3-4 == 4-3
+ a&L &e  & W\\
+ c&L &e & W\\ \hline
+ \sum&0 & 1 & (3-1)! \\\hline
+ =&& & 3 \\
+\end{array}}\ar@{-}[d]
+& &*+[F]{
+\begin{array}{c|ccl}
+ b&L &L & W\\
+ d&e &e & W\\ \hline
+ \sum&0 & 0 & (3-1)! \\ \hline
+  =&& & 2 \\
+\end{array}} \\
+% fourth row (3-2- children)
+*+ [F]{\begin{array}{c|cl} %3-2-4 == 4-3
+ a&L & W\\
+ c&L & W\\ \hline
+ \sum&0 & (2-1)! \\ \hline
+  =&& 1 \\
+\end{array}}
+& &\\
+  } \]
+\caption{R-Volume for [cost.us] and [cost.me]}
+\label{r-volume-costus-costme}
+\end{figure}
+
+Let us trace the execution of the algorithm. The first two
+columns of the root add 0 rankings to the r-volume because they
+contain Ls and must be outranked by some other column. The third
+column leads to the left-most child. Candidates (b) and (d) are
+removed because the third constraint favors the winner and promoting
+it will remove them from consideration. The third constraint is itself
+removed because it is no longer relevant.
+
+This gives a tableau with the first constraint all L, the second and
+third constraints all $e$ and the last constraint all W. The first constraint
+contributes 0 rankings and the last constraint contributes $(4-1)!=6$
+rankings. The second and third constraint recur but produce identical
+tableau since neither constraint contains W. This smaller child tableau is
+similar to its parent--its first constraint is all L, its middle constraint
+all $e$ and its last constraint all W. The all-L constraint still
+contributes 0 rankings, but the all-W constraint now contributes
+$(3-1)!=2$ rankings because there are fewer combinations of the
+remaining constraints. The all-$e$ constraint
+recurs on the still-smaller tableau at the bottom of figure
+\ref{r-volume-costus-costme}. The results are again identical, but
+there is now only $(2-1)!=1$ way to rank the all-W constraint above
+the rest.
+
+Walking back up the tree, this gives a total of three rankings to each
+of the all-$e$ constraints in the first child tableau. The total for
+this tableau is therefore $3+3+6=12$. The results of the algorithm are
+similar for the other two children of the root. It is especially
+obvious from looking at the second child that much of the computation
+is shared in this algorithm and that it can be sped up considerably if
+the function implementing the algorithm is memoized. The difference in
+this case is the evaluation of 7 tableaux for a memoized function and
+12 without memoization.
+
+Like RCD, r-volumes can be used as a consistency check. If the
+r-volume of a winner set is 0, then there there no rankings for which
+the winner set can appear, and it is not part of the factorial typology. A
+function that implements a consistency check version of the algorithm
+is given in \ref{haskell-r-volume}. Instead of $(k-1)!$, winners
+return true, and losers return false.
+
+\begin{figure}
+\begin{verbatim}
+rVolume :: ConTableau -> Bool
+rVolume cols = any r (extractions cols)
+    where r (col@(_,erc),cols) | any (==L) erc = False
+                               | all (==W) erc = True
+                               | otherwise = rVolume (cols \\\ col)
+(\\\) :: [Column] -> Column -> [Column]
+cols \\\ (title,erc) = alwaysZip titles (transpose filtered)
+    where (titles,ercs) = unzip cols
+          filtered = filterProxy (/=W) erc (transpose ercs)
+
+alwaysZip first second = zip first (if second==[] then repeat [] else second)
+filterProxy p proxy l = map fst (filter (p . snd) (zip l proxy))
+\end{verbatim}
+  \caption{R-volume implementation}
+  \label{haskell-r-volume}
+\end{figure}
+
+\subsection{Harmonic Bounds}
+
+The connection of \quotecite{samek-lodovici02}
+harmonic bounds to generation of factorial typologies is
+straightforward. Harmonic bounds are a fast way to find the relevant output
+candidates for some input. Relevant candidates are outputs that can win
+under some ordering of the constraint set. This is similar to a factorial
+typology, which is the list of candidate {\it sets} that can win under
+some ordering of the constraint set. Harmonic bounds are
+useful because {\sc Gen} is theoretically infinite, which is not
+amenable to computational implementations of OT. However,
+\namecite{samek-lodovici99} show that the number of relevant candidates for a
+particular input is bounded by {\sc Dep}: {\sc Dep}
+penalizes unlimited epenthesis, even in cases where some epenthesis is
+prompted by higher-ranked constraints.
+% NOTE: I could swear other people showed Dep's limits earlier and better
+
+The question is how to sort the relevant candidates from the
+irrelevant ones that can never win. Knowing
+that the set is finite does not help one enumerate it. Samek-Lodivici
+and Prince attack the problem by breaking it into two pieces:
+a simple harmonic bound \cite{prince93} and a
+complex bound made from the combination of child bounds. The result is
+a bounding tree that is worst-case factorial in size.
+
+Simple harmonic bounding is straightforward: a candidate bounds any
+candidate that has no fewer violations on any constraint and has more
+violations on some constraint. Here again we see the
+some-dominates-every structure of OT. For example, in tableau
+\ref{tableau-costme}, taken from the RCD example in
+tableau \ref{tableau-costus-costme}, candidate (d), [cost.me] simply bounds
+candidate (f), [cos.tme]; (f) has a violation of {\sc Align-L-W} while
+(d) has none.  This is even clearer in the comparative tableau
+\ref{tableau-cmp-costme}: if a candidate's ERC contains no Ls, it is simply
+bounded by the winner. A simply bounded candidate also contributes no
+information to any algorithm discussed in this paper.
+
+\begin{table}
+\begin{tabular}{|rrl||c|c|c|c|c|}\hline
+\multicolumn{3}{|c||}{/cost\#me/} & {\sc *Complex} & {\sc Onset} & {\sc Align-L-W} & {\sc Align-R-P} & {\sc Parse} \\ \hline\hline
+\LCC
+& &  & &\lightgray &\lightgray &\lightgray &\lightgray \\ \hline
+ d. & $\times$  & cost.me & *! &  &  &  & \\ \hline
+\ECC
+\LCC
+& &  &  &\lightgray &\lightgray &\lightgray &\lightgray \\ \hline
+ e. & \ding{43} & cos.me &  &  &  &  & *\\ \hline
+\ECC
+\LCC
+& &  &  &\lightgray &\lightgray &\lightgray &\lightgray \\ \hline
+ f. &  & cos.tme & *! &  & * &  & \\ \hline
+\ECC
+\end{tabular}
+  \caption{Tableau for /cost\#me/}
+  \label{tableau-costme}
+\end{table}
+
+\begin{table}
+\begin{tabular}{|rc||c|c|c|c|c|}\hline
+ && {\sc *Complex} & {\sc Onset} & {\sc Align-L-W} & {\sc Align-R-P} & {\sc Parse} \\ \hline\hline
+ c. & [cost.me $\sim$ cos.me] &L &$e$ &$e$ & $e$& W\\ \hline
+ d. & [cost.me $\sim$ cos.tme] & $e$ &$e$ & W &$e$ &$e$\\ \hline
+\end{tabular}
+  \caption{Comparative tableau for [cost.me]}
+  \label{tableau-cmp-costme}
+\end{table}
+
+Complex bounding is nearly as easy to describe, although computation
+of it is not so simple. To compute it Samek-Lodovici and Prince
+introduce {\it bounding sets}. Bounding sets contain
+candidates that together serve to bound an irrelevant candidate.  For each violation in a
+complex bound, the constraint violation of some member of the bounding
+set must be less than or equal to the irrelevant candidate. Put
+another way, a complex bound is a vector which, for each constraint, is
+one more than the lowest constraint violation of its members, except
+where all constraint violations are already optimal---that is,
+identical. In the optimal case, the candidate violation must be less than
+or equal to the complex bound's violation. Stated formally, it is
+
+\begin{equation}
+  \forall i, i \leq n, \forall \alpha \in A, [\lambda(i)<\alpha(i) \to \exists
+  \alpha', \alpha'(i) < \lambda(i) ].
+\end{equation}
+
+where $\lambda$ is an irrelevant candidate of length $n$ and $A$ is
+the bounding set. A simple bound becomes a singleton case of a complex
+bound in which all constraint violations are identical.
+For example, a bounding set $\{\langle0 1
+1\rangle\}$ has the bound $\langle 0 1 1\rangle$. A complex bounding
+set $\{\langle0 1 1\rangle, \langle 0 9 9 \rangle, \langle 0 1 0
+\rangle\}$ has the bound $\langle0 2 1\rangle$.
+
+Given a number of relevant candidates, classification of a new
+candidate as relevant or irrelevant is not solved by the introduction
+of bounding sets. The set of all relevant candidates can create a
+bound that is too loose. Smaller sets have tighter bounds because of
+the optimal/singleton bounding case. However, the power set of the
+relevant candidates is exponential in size and full of redundant
+bounds. Samek-Lodovici and Prince give an algorithm that recursively
+finds minimal bounding sets and forms a tree from them.
+
+This tree makes it relatively fast to determine whether a new
+candidate is irrelevant. If it is relevant, the tree can be rebuilt to
+include the new candidate in the relevant set of winners. This leads
+to a method for finding the full harmonic boundary. Initialize the
+bounding tree from the fully faithful output candidate.  Then new
+candidates from {\sc Gen} that are not harmonically bounded by the
+current bounding tree are added to the relevant set and cause the
+bounding tree to be rebuilt. The only missing piece is that {\sc Gen}
+must provide candidates in an order such that it can tell that further
+generation will only provide bounded candidates. Work by
+\namecite{heiberg99} shows a possible implementation of this, using
+constraint violations of previous candidates to guide the generation
+of new ones.
+
+\subsubsection{Bounding Algorithm}
+
+Each
+node in the bounding tree contains a bounding set and an associated complex bound.
+The tree starts with a loose, over-large bounding set consisting of
+all relevant candidates and recursively arrives at singleton bounding sets
+at the leaves. Since singleton bounding sets simply bound candidates,
+the leaf bounds are tight. Children are generated from a non-terminal
+bounding set by examining each constraint in turn and removing
+candidates that are non-optimal for that constraint. The constraint
+that is optimized is also removed as it is no longer informative. This
+is the equivalent to the promotion operation in RCD.
+
+According to Samek-Lodovici and Prince, worst-case size of the
+bounding tree is exponential in the number of children because the
+power set of candidates is the worst-case size of the tree. The tree,
+however, has the potential to include much less of the candidate
+power set if there is enough information in the candidate
+violations. Specifically, if the number of candidates is greater than
+or equal to the number of constraints, the worst case is not
+possible. This is related to analysis by \namecite{riggle08a} of the
+Vapnik-Chervonenkis dimension of OT.
+
+\begin{figure}
+\centering
+\[ \xymatrix{
+% top row
+&*+ [F]{
+    \begin{array}{c|rcccl}
+      &\langle 1 & 0 & 1 & 0 & 1 \rangle \\ \hline
+      d&1 & 0 & 0 & 0 & 0 \\
+      e&0 & 0 & 0 & 0 & 1 \\
+      f&1 & 0 & 1 & 0 & 0 \\
+    \end{array}}
+  \ar@{-}[dl] \ar@{-}[d] \ar@{-}[drr]
+  && \\
+% second row
+\langle 0 0 0 0 1 \rangle&*+ [F]{
+    \begin{array}{c|rcccl}
+ &\langle 1 & 0 & 0 & 0 & 1 \rangle \\ \hline
+ d&1 & 0 & 0 & 0 & 0 \\
+ e&0 & 0 & 0 & 0 & 1 \\
+\end{array}}\ar@{-}[dl]\ar@{-}[dr] && *+ [F]{
+\begin{array}{c|rcccl}
+ &\langle 1 & 0 & 1 & 0 & 0 \rangle \\ \hline
+ d&1 & 0 & 0 & 0 & 0 \\
+ f&1 & 0 & 1 & 0 & 0 \\
+\end{array}}\ar@{-}[d] \\
+% third row
+\langle 0 0 0 0 1 \rangle &&
+\langle 1 0 0 0 0 \rangle &\langle 1 0 0 0 0\rangle\\
+}\]
+\caption{Bounding tree for /cost\#me/}
+\label{bounding-tree-costme}
+\end{figure}
+
+To see this algorithm at work, let us build a bounding tree for
+tableau \ref{tableau-costme}. This candidate set is interesting
+because it contains a harmonically bounded candidate. However, this
+does not prevent Samek-Lodivici and Prince's algorithm from building a
+tree, although it may be one level deeper than necessary. The tree
+that is built is given in figure \ref{bounding-tree-costme}. Only
+candidate letters, constraint violations and the complex bound
+are given for each node; constraint names are left out to save space.
+
+The algorithm starts with the full candidate set at the root. The root
+node's complex bound is $\langle10101\rangle$. For each constraint,
+the complex bound's violations are the minimum violation of the
+bounding set's plus one, except constraints for which all members of
+the bounding set are optimal. In addition, since this is a complex
+bound, it must recur on each constraint. Only one candidate, [cos.me]
+(e), is optimal for the first constraint, {\sc *Complex}, so the
+algorithm returns the simple bound $\langle00001\rangle$, that of
+candidate (e). The next constraint, {\sc Onset}, is the opposite of
+{\sc *Complex}; all candidates are optimal for it. The recursive call
+is therefore identical to the original call except that {\sc Onset} is
+fixed at 0, so it can be skipped.  The third constraint, {\sc
+  Align-L-W}, is more interesting: it
+removes candidate (f) but leaves candidates (d) and (e). The recursive
+call receives a multiple-candidate set and therefore finds another
+complex bound: $\langle10001\rangle$.
+
+The rest of the tree is built in much the same way. Notice that the
+leaves are redundant. Although the bounding tree eliminates many of
+the redundant bounds, it does not eliminate them all. However, this
+algorithm only investigated 7 of the possible $2^5-1 = 31$ subsets of
+the 5 constraints.
+
+\section{Algorithms}
+Given the previous work, the factorial typology algorithms are
+actually quite simple. The implementation of each will be explained in
+detail. To start, I will present the code for the naive algorithm. It
+is first given in figure \ref{naive-factorial-haskell} and is repeated
+in figure \ref{naive-factorial-haskell2}.
+
+  \begin{figure}
+\begin{verbatim}
+naive :: [Tableau] -> [[Candidate]]
+naive = nub . transpose . map (map eval . factorial . colify)
+    where factorial (cands,cols) = map ((,) cands) . permute $ cols
+          colify :: Tableau -> CandTableau
+          colify (_, rows) = (map fst rows, transpose (map snd rows))
+
+permute :: [t] -> [[t]]
+permute [] = [[]]
+permute l = [x:ys | (x,xs) <- extractions l, ys <- permute xs]
+
+extractions :: [t] -> [(t, [t])]
+extractions l = extract l []
+    where extract [] _ = []
+          extract (x:xs) prev = (x, prev++xs) : extract xs (x : prev)
+\end{verbatim}
+  \caption{Naive factorial algorithm}
+  \label{naive-factorial-haskell2}
+\end{figure}
+
+The naive algorithm first generates all permutations of constraint
+rankings. Then it evaluates the candidate sets for each ranking---the
+candidate sets that win make up the factorial typology. The Haskell
+code implements this in three main steps. The first step is the most
+involved: evaluation of individual tableaux:
+\verb+map (map eval . factorial . colify)+. {\tt colify}
+ processes the input tableaux to that it is in column-major form as
+ well as dropping the constraints and splitting the candidates
+from their violation rows. Then {\tt map eval . factorial} generates
+all permutations of the constraints and evaluates each one in turn.
+
+Afterward, {\tt transpose} turns the individual winners for each input
+into winner sets. Finally, {\tt nub} removes duplicates
+from the typology.
+
+
+\subsection{Exponential RCD Algorithm}
+
+Hayes' algorithm is both simple and clever. Instead of evaluating
+tableaux based on constraints promoted recursively, it takes an
+entirely different approach. The factorial typology is a series of
+winner sets, so Hayes generates all possible winner sets and removes
+inconsistent ones. As described before, RCD can easily provide a
+consistency check. This method is exponential in the number of input
+forms and the number of candidates for each input; RCD takes $(k^2 + k)
+/ 2$ time for each winner set but this is dominated by the $m^n$ time
+of checking every winner set. The algorithm is well-suited to
+practical use since most OT data sets have either a small number of
+input forms or a small number of candidates per input. The code to
+generate all candidate sets is given in figure \ref{haskell-hayes}.
+
+\begin{figure}
+\centering
+\begin{verbatim}
+hayes = exponential rcd
+
+exponential :: (ConTableau -> Bool) -> [Tableau] -> [[Candidate]]
+exponential test = map (map fst) . filter succeed . sequence . map winners
+    where succeed = test . combine
+          winners :: Tableau -> [(Candidate,ConTableau)]
+          winners (con,rows) =
+              [comparative (row,(con,rows)) | (row, rows) <- extractions rows]
+
+comparative :: (Row,Tableau) -> (Candidate,ConTableau)
+comparative ((cand,viols),(con,tab)) =
+    (cand, zip con (transpose . map (sub viols) . snd . unzip $ tab))
+    where sub row1 row2 = map classify (zipWith (-) row1 row2)
+          classify n | n < 0 = W
+                     | n > 0 = L
+                     | otherwise = E
+combine :: [(Candidate,ConTableau)] -> ConTableau
+combine extracted =
+    zip (map fst cols) (map concat . transpose . map (map snd) $ allcols)
+    where allcols@(cols:_) = map snd extracted
+\end{verbatim}
+  \caption{Exponential RCD implementation}
+  \label{haskell-hayes}
+\end{figure}
+
+There are three important functions in this implementation. The
+top-level function is {\tt exponential}, which orchestrates the
+generation and evaluation of the winner sets. {\tt map winners}
+constructs relative tableaux for each candidate in each tableau. Then
+the built-in Haskell function {\tt sequence} generates all
+combinations of these relative tableaux---that is, tableaux for all
+winner sets. {\tt filter succeed} combines each winner set into a
+single tableau with {\tt combine} and removes inconsistent winner sets
+by running RCD as a consistency check. Finally, {\tt map (map fst)}
+extracts the candidate names from the tableaux.
+
+\subsection{Exponential R-Volume Algorithm}
+
+In figure \ref{haskell-hayes}, any consistency check function can be passed to
+{\tt exponential} as {\tt test}. Since Riggle's algorithm is
+identical in relying on {\tt exponential} it can be written
+\verb+riggle = exponential rVolume+, given the definition of {\tt
+  rVolume} in section \ref{r-volume}. The only difference is that the
+performance of Riggle's algorithm is better than that of
+Hayes' because {\tt rVolume} has a time bound of $O(k log_2 k)$, which
+is better than RCD's $O(k^2)$. However, the overall time bound is
+still exponential in the number of input candidates: $O(m^n)$.
+
+\subsection{Bounded Factorial Algorithm}
+The outline of the bounded factorial algorithm is similar to the naive
+algorithm. However, it avoids unnecessary work by using the bounds of
+Samek-Lodovici and Prince. This complicates the implementation because
+the factorial generation and OT evaluation are not separate as in the
+naive implementation. In fact, harmonic bounds replace {\sc Eval} to
+provide partial evaluation. Permutations of the constraint hierarchy are explored
+incrementally and at each step of the tree's generation, only informative tableaux
+are expanded based on candidates remaining after the newly promoted
+constraints are evaluated.
+
+The two major differences between this algorithm and Samek-Lodovici
+and Prince's algorithm to generate a bounding tree is that this
+algorithm operates over multiple candidates and does not build the
+tree in memory, although its execution path is a recursive tree. Since
+there are multiple tableaux, one for each candidate, the bounding
+algorithm can only quit when all tableaux are uninformative.
+
+To be more concrete, let us look at the code in figure
+\ref{haskell-bounded-factorial}. The top-level
+function {\tt bounded} converts tableaux to column-major form before
+calling the main recursive function {\tt factStep}. The first
+clause of {\tt factStep} checks for single-column tableaux. This
+degenerate base case means that no more information is available from the
+constraint ranking since the constraint hierarchy is fully
+ranked---the winning set is available by evaluating the remaining
+candidates on the remaining constraint in {\tt promoteLast}.
+
+In the normal case, {\tt factStep} investigates each constraint in
+turn, using the same procedure as for the bounding tree algorithm:
+only candidates with minimum violation for the constraint in question
+are used. {\tt step} generates the new, smaller tableaux and skips the
+ones whose promoted constraints are already optimal and thus
+uninformative. The tableau sets
+of {\tt step} are given to the recursive step one at a time. The
+pieces of factorial typology returned by the recursive step are
+combined by {\tt Set.unions}.
+
+{\tt recur} is the function that most closely mimics the
+bounding tree algorithm. Its first clause checks whether all tableaux
+contain only a single candidate, in which case the recursion is done
+and the candidate set forms part of the harmonic bound.
+This means that the candidate set is necessarily part of the
+factorial typology since members of the harmonic bound must be winner
+sets to bound irrelevant candidate sets.
+
+If the base case is not satisfied, {\tt recur} eliminates
+uninformative constraints from the constraint set and recurs on {\tt
+  factStep} again. Uninformative constraints are those for which all
+candidates are optimal. A constraint whose violations are all 0 or all
+1, for example, is uninformative since promoting it does not eliminate
+any non-optimal candidates.
+
+  \begin{figure}
+    \centering
+    \begin{verbatim}
+bounded :: [Tableau] -> [[Candidate]]
+bounded = Set.toList . factStep . map colify
+
+factStep :: [CandTableau] -> Set.Set [Candidate]
+factStep tabs | any singleCol tabs = Set.singleton (map promoteLast tabs)
+factStep tabs = Set.unions . map recur . step $ tabs
+
+recur :: [CandTableau] -> Set.Set [Candidate]
+recur tabs | all singleRow tabs = Set.singleton (map (head . fst) tabs)
+           | otherwise = factStep (withCands informative tabs)
+
+step :: [CandTableau] -> [[CandTableau]]
+step tabs = map (map (uncurry promote) . zip candsets) tabsets
+    where candsets = map fst tabs
+          tabsets = check . transpose . map (extractions . snd) $ tabs
+          check = filter (any (notSame . fst))
+
+informative :: [[[Int]]] -> [[[Int]]]
+informative violations = map (filterProxy id informativeCols) violations
+    where informativeCols = map (any notSame) (transpose violations)
+
+promoteLast :: CandTableau -> Candidate
+promoteLast (cands,col:cols) = head . fst $ promote cands (col, [])
+
+notSame = any (uncurry (/=)) . win2
+singleRow = (==1) . length . head . snd
+singleCol = (==1) . length . snd
+withCands f tabs = zip (map fst tabs) (f (map snd tabs))
+
+win2 l = zip l (tail l)
+\end{verbatim}
+    \caption{Bounded factorial implementation}
+    \label{haskell-bounded-factorial}
+  \end{figure}
+
+%\section{Performance}
+%   \item The run time and space usage of each algorithm is presented. The
+%     relevant parameters are worst case and average case, since they
+%     differ dramatically for each algorithm.
+
+%     \item Empirical measurements of run time and space usage for
+%       large, randomly generated tableaux and worst-case tableaux.
+%   %\subsection{Run time: worst case, average case}
+%   %\subsection{Space: worst case, average case}
+%   %\subsection{Empirical measurements}
+%   \section{Example}
+%   \item A worked example of a small, four-constraint set for an artificial
+%   language. The individual steps of all four algorithms will be shown.
+\section{Example}
+
+The example given by \namecite{anttila06} starts with the
+inputs /cost\#us/, /cost\#me/ and /cost/ and the constraint set {\sc
+  *Complex}, {\sc Onset}, {\sc Align-L-W}, {\sc Align-R-P}, and {\sc
+  Parse}. The complete tableaux are given in tableau
+\ref{tableau-costus-costme-cost}.
+
+\begin{table}
+\begin{tabular}{|rrl||c|c|c|c|c|}\hline
+\multicolumn{3}{|c||}{/cost\#us/} & {\sc *Complex} & {\sc Onset} & {\sc Align-L-W} & {\sc Align-R-P} & {\sc Parse} \\ \hline\hline
+\LCC
+& &  & &\lightgray &\lightgray &\lightgray &\lightgray \\ \hline
+ a. & $\times$ & cost.us & *! & * &  &  & \\ \hline
+\ECC
+\LCC
+& &  &  & &\lightgray &\lightgray &\lightgray \\ \hline
+ b. &  & cos.us &  & *! &  &  & *\\ \hline
+\ECC
+\LCC
+& &  &  & &\lightgray &\lightgray &\lightgray \\ \hline
+ c. & \ding{43} & cos.tus &  &  & * &  & \\ \hline \hline
+\ECC
+\multicolumn{3}{|c||}{/cost\#me/} &  &  & & &  \\ \hline\hline
+\LCC
+& &  & &\lightgray &\lightgray &\lightgray &\lightgray \\ \hline
+ d. & $\times$  & cost.me & *! &  &  &  & \\ \hline
+\ECC
+\LCC
+& &  &  &\lightgray &\lightgray &\lightgray &\lightgray \\ \hline
+ e. & \ding{43} & cos.me &  &  &  &  & *\\ \hline
+\ECC
+\LCC
+& &  &  &\lightgray &\lightgray &\lightgray &\lightgray \\ \hline
+ f. &  & cos.tme & *! &  & * &  & \\ \hline \hline
+\ECC
+\multicolumn{3}{|c||}{/cost/} &  &  & & &  \\ \hline\hline
+\LCC
+& &  &  &\lightgray &\lightgray &\lightgray &\lightgray \\ \hline
+ g. &  & cost & *! &  &  &  & \\ \hline
+\ECC
+\LCC
+& &  &  &\lightgray &\lightgray &\lightgray &\lightgray \\ \hline
+ h. & \ding{43} & cos &   &  &   & * & * \\ \hline
+\ECC
+\end{tabular}
+  \caption{Tableaux for /cost\#us/, /cost\#me/, /cost/}
+  \label{tableau-costus-costme-cost}
+\end{table}
+
+\subsection{Exponential RCD}
+
+The exponential RCD method first generates all combinations of candidates as winner
+sets. For the candidates in tableau \ref{tableau-costus-costme-cost},
+there are $3\cdot3\cdot2=18$ winner sets, given in figure
+\ref{candidates-costus-costme-cost}. The factorial typology for this
+example is given in figure \ref{typology-costus-costme-cost}.
+
+\begin{figure}
+\begin{enumerate}
+\item\{[cost.us],[cost.me],[cost]\}
+\item\{[cost.us],[cost.me],[cos]\}
+\item\{[cost.us],[cos.me],[cost]\}
+\item\{[cost.us],[cos.me],[cos]\}
+\item\{[cost.us],[cos.tme],[cost]\}
+\item\{[cost.us],[cos.tme],[cos]\}
+\item\{[cos.us],[cost.me],[cost]\}
+\item\{[cos.us],[cost.me],[cos]\}
+\item\{[cos.us],[cos.me],[cost]\}
+\item\{[cos.us],[cos.me],[cos]\}
+\item\{[cos.us],[cos.tme],[cost]\}
+\item\{[cos.us],[cos.tme],[cos]\}
+\item\{[cos.tus],[cost.me],[cost]\}
+\item\{[cos.tus],[cost.me],[cos]\}
+\item\{[cos.tus],[cos.me],[cost]\}
+\item\{[cos.tus],[cos.me],[cos]\}
+\item\{[cos.tus],[cos.tme],[cost]\}
+\item\{[cos.tus],[cos.tme],[cos]\}
+\end{enumerate}
+  \caption{Winner sets for /cost\#us/, /cost\#me/, /cost/}
+  \label{candidates-costus-costme-cost}
+\end{figure}
+
+\begin{figure}
+  \begin{enumerate}
+    \item \{[cost.us], [cost.me], [cost]\}
+    \item \{[cos.us], [cos.me], [cost]\}
+    \item \{[cos.us], [cos.me], [cos]\}
+    \item \{[cos.tus], [cost.me], [cost]\}
+    \item \{[cos.tus], [cos.me], [cost]\}
+    \item \{[cos.tus], [cos.me], [cos]\}
+  \end{enumerate}
+  \caption{Factorial typology for /cost\#us/, /cost\#me/, /cost/}
+  \label{typology-costus-costme-cost}
+\end{figure}
+
+For this example, I will continue with two interesting winner sets from figure
+\ref{candidates-costus-costme-cost}: \{[cos.us], [cos.me], [cost]\}
+and \{[cost.us], [cost.me], [cos]\}. The first set is part of the
+factorial typology, even though it is not obvious that t-deletion can
+happen prevocalically but not word-finally. The second set is not
+part of the factorial typology, even though it is not obvious that
+word-final t-deletion requires interconsonantal t-deletion.
+
+\begin{table}
+\begin{tabular}{|rc||c|c|c|c|c|}\hline
+ && {\sc *Complex} & {\sc Onset} & {\sc Align-L-W} & {\sc Align-R-P} & {\sc Parse} \\ \hline\hline
+ a. & [cos.us $\sim$ cost.us] & W & $e$ &$e$  &$e$  & L\\ \hline
+ b. & [cos.us $\sim$ cos.tus] &$e$ &L & W &$e$ &L\\ \hline
+ c. & [cos.me $\sim$ cost.me] & W&$e$ &$e$ & $e$& L\\ \hline
+ d. & [cos.me $\sim$ cos.tme] & W&$e$& W  &$e$&$e$\\ \hline
+ e. & [cost $\sim$ cos]            &L &$e$ &$e$&W   & W \\ \hline
+\end{tabular}
+  \caption{Comparative tableau for [cos.us], [cos.me], [cost]}
+  \label{tableau-cmp-cosus-cosme-cost}
+\end{table}
+
+The relative tableau for the first winner set example is tableau
+\ref{tableau-cmp-cosus-cosme-cost}. Once the relative tableau is created,
+RCD must check that the winner set is
+consistent. A consistent winner set allows RCD to promote all
+constraints. The first step is shown in tableau
+\ref{tableau-cmp-cosus-cosme-cost2}. Here, {\sc Align-L-W} and {\sc
+  Align-R-P} have been promoted because they contain no
+L cells. The candidates with W cells for {\sc Align-L-W} and {\sc
+  Align-R-P} have also been removed since they are now bounded by
+these two promoted constraints.
+
+\begin{table}
+\begin{tabular}{|rc||c|c|c|}\hline
+ && {\sc *Complex} & {\sc Onset} & {\sc Parse} \\ \hline\hline
+ a. & [cos.us $\sim$ cost.us] & W & $e$ & L\\ \hline
+ c. & [cos.me $\sim$ cost.me] & W&$e$ & L\\ \hline
+\end{tabular}
+  \caption{RCD of [cos.us], [cos.me], [cost], step 2}
+  \label{tableau-cmp-cosus-cosme-cost2}
+\end{table}
+
+The process ends on the next step. First {\sc *Complex} and {\sc
+  Onset} are promoted since they contain no L cells. Now {\sc
+  *Complex} bounds candidates (a) and (c), and they are removed. There
+are now no candidates left in the tableau and {\sc Parse} is trivially
+promotable; it contains no L cells because it contains no cells at
+all. Therefore, \{[cos.us], [cos.me], [cost]\} is part of the
+factorial typology.
+
+\begin{table}
+\begin{tabular}{|rc||c|c|c|c|c|}\hline
+ && {\sc *Complex} & {\sc Onset} & {\sc Align-L-W} & {\sc Align-R-P} & {\sc Parse} \\ \hline\hline
+ a. & [cost.us $\sim$ cos.us] & L & $e$ &$e$  &$e$  & W\\ \hline
+ b. & [cost.us $\sim$ cos.tus] &L &L & W &$e$ &$e$\\ \hline
+ c. & [cost.me $\sim$ cos.me] &L &$e$ &$e$ & $e$& W\\ \hline
+ d. & [cost.me $\sim$ cos.tme] & $e$ &$e$ & W &$e$ &$e$\\ \hline
+ e. & [cos $\sim$ cost] & W & $e$ &$e$ & L & L \\ \hline
+\end{tabular}
+  \caption{Comparative tableau for [cost.us], [cost.me], [cos]}
+  \label{tableau-cmp-costus-costme-cos}
+\end{table}
+
+Let us now look at \{[cost.us], [cost.me], [cos]\}. Its initial
+comparative tableau is \ref{tableau-cmp-costus-costme-cos}. The first
+step of RCD promotes only {\sc Align-L-W} and removes candidates (b)
+and (d). This gives tableau \ref{tableau-cmp-costus-costme-cos2}. Now
+{\sc Onset} is promoted, but this removes no candidates since it has
+no W cells. None of the remaining constraints, ({\sc *Complex}, {\sc
+  Align-R-P} and {\sc Parse}) can be promoted since they all contain
+at least one L. RCD fails and as a result the winner set \{[cost.us],
+[cost.me], [cos]\} is not part of the factorial typology.
+
+\begin{table}
+\begin{tabular}{|rc||c|c|c|c|}\hline
+ && {\sc *Complex} & {\sc Onset} & {\sc Align-R-P} & {\sc Parse} \\ \hline\hline
+ a. & [cost.us $\sim$ cos.us] & L & $e$ &$e$  & W\\ \hline
+ c. & [cost.me $\sim$ cos.me] &L &$e$ & $e$& W\\ \hline
+ e. & [cos $\sim$ cost] & W & $e$ & L & L \\ \hline
+\end{tabular}
+  \caption{RCD of [cost.us], [cost.me], [cos], step 2}
+  \label{tableau-cmp-costus-costme-cos2}
+\end{table}
+\subsection{Exponential R-volume}
+
+Riggle's method is identical to Hayes' except for the use of r-volume
+as a consistency check instead of RCD. Therefore, this example will
+start from the same two winning sets as those in the Hayes
+example. The r-volume algorithm starts with
+tableau \ref{tableau-cmp-cosus-cosme-cost}. It skips
+{\sc *Complex} and {\sc Onset} because they contain at least one
+L. Next, since {\sc Align-L-W} contains some W cells but not all Ws,
+the algorithm removes {\sc Align-L-W} and candidates (b) and (d) to
+produce tableau \ref{r-volume-cosus-cosme-cost2}.
+
+Here, {\sc *Complex} is again skipped because it still contains an L for
+candidate (e), but {\sc Onset} now contains
+only $e$ cells, which causes another recursive call. However, no candidates
+are removed because {\sc Onset} has no W cells. This produces tableau
+\ref{r-volume-cosus-cosme-cost3}. Now {\sc *Complex} is skipped yet
+again, and {\sc Align-R-P} causes a recursive call after removing
+candidate (e). In tableau \ref{r-volume-cosus-cosme-cost4}, we finally
+see that {\sc *Complex} consists of nothing but W cells. This means
+that the r-volume is positive, the candidate set is consistent, and
+that it is part of the factorial typology.
+
+\begin{table}
+\begin{tabular}{|rc||c|c|c|c|}\hline
+ && {\sc *Complex} & {\sc Onset} & {\sc Align-R-P} & {\sc Parse} \\ \hline\hline
+ a. & [cos.us $\sim$ cost.us] & W & $e$ &$e$  & L\\ \hline
+ c. & [cos.me $\sim$ cost.me] & W&$e$ & $e$& L\\ \hline
+ e. & [cost $\sim$ cos]            &L &$e$&W   & W \\ \hline
+\end{tabular}
+  \caption{R-volume consistency check for \{[cos.us], [cos.me], [cost]\}, call 2}
+  \label{r-volume-cosus-cosme-cost2}
+\end{table}
+
+\begin{table}
+\begin{tabular}{|rc||c|c|c|}\hline
+ && {\sc *Complex} &  {\sc Align-R-P} & {\sc Parse} \\ \hline\hline
+ a. & [cos.us $\sim$ cost.us] & W &$e$  & L\\ \hline
+ c. & [cos.me $\sim$ cost.me] & W& $e$& L\\ \hline
+ e. & [cost $\sim$ cos]            &L &W   & W \\ \hline
+\end{tabular}
+  \caption{R-volume consistency check for \{[cos.us], [cos.me],
+    [cost]\}, call 3}
+  \label{r-volume-cosus-cosme-cost3}
+\end{table}
+
+\begin{table}
+\begin{tabular}{|rc||c|c|c|}\hline
+ && {\sc *Complex} & {\sc Parse} \\ \hline\hline
+ a. & [cos.us $\sim$ cost.us] & W & L\\ \hline
+ c. & [cos.me $\sim$ cost.me] & W& L\\ \hline
+\end{tabular}
+  \caption{R-volume consistency check for \{[cos.us], [cos.me], [cost]\}, call 4}
+  \label{r-volume-cosus-cosme-cost4}
+\end{table}
+
+For inconsistent candidate sets, the r-volume consistency check may be
+forced to do more work since it can not quit early upon finding a
+positive r-volume. However, in the case of the candidate set
+\{[cost.us], [cost.me], [cos]\}, the recursion is quite
+restricted because most constraints contain an L and therefore can be
+discarded immediately. The starting tableau
+\ref{tableau-cmp-costus-costme-cos} is the same as that of RCD for the
+same candidate set.
+
+ The first iteration of r-volume eliminates all constraints but {\sc
+   Align-L-W}, since it is the only one that does not contain an
+ L. Recursion on {\sc Align-L-W} creates tableau
+ \ref{r-volume-costus-costme-cos2} with candidates (b) and (d)
+ removed. Here the situation is almost identical: all constraints
+ except {\sc Onset} contain an L, so recursion happens only on {\sc
+   Onset}, giving tableau \ref{r-volume-costus-costme-cos3}.
+
+ Since {\sc Onset} has no Ws, it removes no candidates and as a result
+ every constraint in tableau \ref{r-volume-costus-costme-cos3} is
+ discarded. The r-volume algorithm fails to find an all-W constraint
+ anywhere in its search tree, meaning that the r-volume is zero. This means that
+ \{[cost.us], [cost.me], [cos]\} is inconsistent and not part of the
+ factorial typology.
+
+\begin{table}
+\begin{tabular}{|rc||c|c|c|c|}\hline
+ && {\sc *Complex} & {\sc Onset} & {\sc Align-R-P} & {\sc Parse} \\ \hline\hline
+ a. & [cost.us $\sim$ cos.us] & L & $e$ &$e$  & W\\ \hline
+ c. & [cost.me $\sim$ cos.me] &L &$e$ & $e$& W\\ \hline
+ e. & [cos $\sim$ cost]         & W & $e$ & L    & L \\ \hline
+\end{tabular}
+  \caption{R-volume consistency check for \{[cost.us], [cost.me],
+    [cos]\}, call 2}
+  \label{r-volume-costus-costme-cos2}
+\end{table}
+
+\begin{table}
+\begin{tabular}{|rc||c|c|c|}\hline
+ && {\sc *Complex} & {\sc Align-R-P} & {\sc Parse} \\ \hline\hline
+ a. & [cost.us $\sim$ cos.us] & L &$e$  & W\\ \hline
+ c. & [cost.me $\sim$ cos.me] &L & $e$& W\\ \hline
+ e. & [cos $\sim$ cost]         & W & L    & L \\ \hline
+\end{tabular}
+  \caption{R-volume consistency check for \{[cost.us], [cost.me],
+    [cos]\}, call 3}
+  \label{r-volume-costus-costme-cos3}
+\end{table}
+
+\subsection{Bounded Factorial}
+
+The bounded factorial algorithm requires more exposition than the
+other two because its execution cannot be easily subdivided in the
+same way as the candidate set enumeration approach.
+Instead, portions of the entire search tree are
+given below: the first, figure \ref{bounded-cosus-cosme-cost}, shows
+the initial call and its children. The second and third figures,
+\ref{bounded-cosus-cosme-cost3} and \ref{bounded-cosus-cosme-cost5},
+show the complete search tree for {\sc Align-L-W} and {\sc
+  Parse}. These constraints produce search trees intermediate in size;
+that of {\sc *Complex} is smaller and those of {\sc Align-R-P} and
+{\sc Onset} are larger.
+
+The notation is somewhat abbreviated to fit the call tree into
+available space. Candidates are identified by their letters and
+constraints are identified by a single capital letter, the first
+except for {\sc Align-L-W} and {\sc Align-R-P}, which would otherwise
+be ambiguous. Constraint violations are marked in the usual way with
+an asterisk. Each tableau represents a call in the call tree;
+the children represent recursive calls. The number in the top-left of
+each tableau is the indices of the constraints that have been promoted.
+
+Figure \ref{bounded-cosus-cosme-cost} shows algorithm's first step,
+starting from the root node. Each constraint in turn is removed as
+well as any candidates that are not optimal for that constraint. This
+is equivalent to promoting the constraint above the remaining
+constraints and below any previously-promoted constraints and in fact
+calls {\tt promote} in the implementation. For the root node, 5
+children result. For example, when {\sc *Complex} is promoted
+(producing tableau 1 in the figure), candidates (a), (d), (f) and (g)
+are removed because they are not optimal with respect to {\sc
+  *Complex}. At this point, the outputs for /cost\#me/ and /cost/ have
+winners: (e) and (h).  However, for /cost\#us/ (c) will only win if
+{\sc Align-L-W} is promoted. If {\sc Onset} or {\sc Parse} are
+promoted, (b) will win. {\sc Align-R-W} is already optimal for all
+candidates and is skipped.
+
+\begin{figure}
+\centering
+\[ \xymatrix{
+% top row
+  *+ [F]{
+   \begin{array}{crccl}
+     1&O &L&R&P\\ \hline
+      b & * &   &   & * \\
+      c &   & * &   &  \\ \hline
+      e &   &   &   & *\\ \hline
+      h &   &   & * & * \\
+    \end{array}}
+  &*+ [F]{
+   \begin{array}{crcccl}
+     &C &O&L&R&P\\ \hline
+      a&* & * &   &   &   \\
+      b&  & * &   &   & * \\
+      c&  &   & * &   &  \\ \hline
+      d&* &   &   &   &   \\
+      e&  &   &   &   & *\\
+      f&* &   & * &   &  \\ \hline
+      g&* &   &   &   &   \\
+      h&  &   &   & * & * \\
+    \end{array}}
+  \ar@{-}[l]\ar@{-}[dl] \ar@{-}[d]\ar@{-}[dr]\ar@{-}[r]
+  &
+  *+ [F]{
+   \begin{array}{crccl}
+     2&C&L&R&P\\ \hline
+      c&  & * &   &  \\ \hline
+      d&* &   &   &   \\
+      e&  &   &   & *\\
+      f&* & * &   &  \\ \hline
+      g&* &   &   &   \\
+      h&  &   & * & * \\
+    \end{array}}\\
+  *+ [F]{
+   \begin{array}{crccl}
+     3&C&O&R&P\\ \hline
+      a&* & * &   &   \\
+      b&  & * &   & * \\ \hline
+      d&* &   &   &   \\
+      e&  &   &   & *\\ \hline
+      g&* &   &   &   \\
+      h&  &   & * & * \\
+    \end{array}}
+  % new row
+  &*+ [F]{
+   \begin{array}{crccl}
+     4&C&O&L&P\\ \hline
+      a&* & * &   &   \\
+      b&  & * &   & * \\
+      c&  &   & * &  \\ \hline
+      d&* &   &   &   \\
+      e&  &   &   & *\\
+      f&* &   & * &  \\ \hline
+      g&* &   &   &   \\
+    \end{array}}
+  &*+ [F]{
+   \begin{array}{crccl}
+     5&C&O&L&R\\ \hline
+      a&* & * &   &   \\
+      c&  &   & * &   \\ \hline
+      d&* &   &   &   \\
+      f&* &   & * &   \\ \hline
+      g&* &   &   &   \\
+    \end{array}} \\
+}\]
+  \caption{Bounded factorial call tree for [cos.us], [cos.me], [cost]}
+  \label{bounded-cosus-cosme-cost}
+\end{figure}
+% make a step-factorial that only generates the alphabetically
+% succeeding children instead of all children
+
+% NOTE:except that you can't predict whether an alphabetically
+% preceding tableau will have been evaluated already
+
+Figure \ref{bounded-cosus-cosme-cost3} picks up evaluation from child
+tableau 3 of figure \ref{bounded-cosus-cosme-cost}, which promotes
+{\sc Align-L-W}. Its first child tableau, tableau 31, promotes {\sc
+  *Complex}, which is a terminal tableau because each subtableau has
+only one candidate. Its winner set is \{(b),(e),(h)\} or \{ [cos.us],
+[cos.me], [cos] \}.
+
+The second child tableau should be 32, the promotion of {\sc
+  Onset}. However, {\sc Onset} is skipped because it is not
+informative: all candidates are equally optimal with respect to {\sc
+  Onset}. Instead, the second child tableau is 34, the promotion of
+{\sc Align-R-P}, which eventually leads to two
+winner sets, \{[cos.us], [cos.me], [cost]\} and \{[cost.us],
+[cost.me], [cost]\}. Finally, promoting {\sc Parse} gives tableau 35
+and the winner set \{[cos.us], [cos.me], [cost]\} again.
+
+Notice here that promoting {\sc Align-R-P} does redundant work in the
+subsequent promotion of {\sc Parse} in tableau 345. Unfortunately
+this algorithm cannot avoid all redundant work so this winner set is
+calculated twice. Redundant work also happens when two promotions lead
+to the same tableau, such as in tableaux 53 and 35. Memoization of the
+algorithm on the candidate and constraint sets could avoid this
+redundancy.
+
+\begin{figure}
+\centering
+\[ \xymatrix{
+  &*+ [F]{
+   \begin{array}{crccl}
+     3&C&O&R&P\\ \hline
+      a&* & * &   &   \\
+      b&  & * &   & * \\ \hline
+      d&* &   &   &   \\
+      e&  &   &   & *\\ \hline
+      g&* &   &   &   \\
+      h&  &   & * & * \\
+    \end{array}}\ar@{-}[dl]\ar@{-}[d]\ar@{-}[dr]
+  &\\
+  *+ [F]{
+   \begin{array}{crcl}
+     31&O&R&P\\ \hline
+      b& * &   & * \\ \hline
+      e&   &   & *\\ \hline
+      h&   & * & * \\
+    \end{array}}
+  &*+ [F]{
+   \begin{array}{crcl}
+     34&C&O&P\\ \hline
+      a&* & * &   \\
+      b&  & * & * \\ \hline
+      d&* &   &   \\
+      e&  &   & *\\ \hline
+      g&* &   &   \\
+    \end{array}}\ar@{-}[dr]\ar@{-}[d]
+  &*+ [F]{
+   \begin{array}{crcl}
+     35&C&O&R\\ \hline
+      a&* & * &   \\ \hline
+      d&* &   &   \\ \hline
+      g&* &   &   \\
+    \end{array}}\\
+  % 3-- row
+  &*+ [F]{
+   \begin{array}{crl}
+     341&O&P\\ \hline
+      b& * & * \\ \hline
+      e&   & *\\ \hline
+      g&   &   \\
+    \end{array}}
+  &*+ [F]{
+   \begin{array}{crl}
+     345&C&O\\ \hline
+      a&* & * \\ \hline
+      d&* &   \\ \hline
+      g&* &   \\
+    \end{array}} \\
+}\]
+  \caption{Bounded factorial call tree, {\sc Align-L-W} branch}
+  \label{bounded-cosus-cosme-cost3}
+\end{figure}
+  
+  \begin{figure}
+\centering
+\[ \xymatrix{
+  &*+ [F]{
+   \begin{array}{crccl}
+     5&C&O&L&R\\ \hline
+      a&* & * &   &   \\
+      c&  &   & * &   \\ \hline
+      d&* &   &   &   \\
+      f&* &   & * &   \\ \hline
+      g&* &   &   &   \\
+    \end{array}} \ar@{-}[dl]\ar@{-}[d]\ar@{-}[dr]
+  &&\\
+  % 5- row
+  *+ [F]{
+   \begin{array}{crcl}
+     51&O&L&R\\ \hline
+      c&   & * &   \\ \hline
+      d&   &   &   \\
+      f&   & * &   \\ \hline
+      g&   &   &   \\
+    \end{array}}\ar@{-}[d]
+  &*+ [F]{
+   \begin{array}{crcl}
+     52&C&L&R\\ \hline
+      c&  & * &   \\ \hline
+      d&* &   &   \\
+      f&* & * &   \\ \hline
+      g&* &   &   \\
+    \end{array}}\ar@{-}[d]
+  &*+ [F]{
+   \begin{array}{crcl}
+     53&C&O&R\\ \hline
+      a&* & * &   \\ \hline
+      d&* &   &   \\ \hline
+      g&* &   &   \\
+    \end{array}}\\
+  % 5-- row
+  *+ [F]{
+   \begin{array}{crl}
+     513&O&R\\ \hline
+      c &   &   \\ \hline
+      d &   &   \\ \hline
+      g &   &   \\
+    \end{array}}
+  &*+ [F]{
+    \begin{array}{crl}
+      523&C&R\\ \hline
+      c&  &   \\ \hline
+      d&* &   \\ \hline
+      g&* &   \\
+    \end{array}}
+  &&\\
+}\]
+  \caption{Bounded factorial call tree, {\sc Parse} branch}
+  \label{bounded-cosus-cosme-cost5}
+\end{figure}
+
+Figure \ref{bounded-cosus-cosme-cost5} shows the call tree that
+results from promoting {\sc Parse}. It is similar to figure
+\ref{bounded-cosus-cosme-cost3}. One difference is that at the bottom
+of the search tree tableau 5123 triggers the single-constraint
+terminal clause of {\tt factStep}. There is only one winner for each
+subtableau in 5123.  In the case that some subtableau has more than
+one winner even for a single-constraint tableau, the algorithm chooses
+the first winner that is optimal for the remaining constraint. This
+case is handled by the function {\tt promoteLast} in the
+implementation.
+
+\section{Discussion}
+Structurally, all three algorithms are quite similar. They all operate
+by selectively promoting constraints and eliminating candidates. This
+gives them a common `some-W-dominates-every-L' pattern that repeats
+throughout. This commonality results from the basic structure of Optimality Theory.
+
+Although the internals of the algorithms are similar, the high level
+approach is quite different between Hayes and Riggle's winner-set
+algorithm and the bounded factorial algorithm given here. Generating
+all winner sets is a clever and pragmatic attack on the problem; most
+real world data sets have a small number of inputs and candidates,
+since linguists generally select only interesting, non-redundant
+candidates for inclusion. Even better, the method reuses Recursive
+Constraint Demotion, a well understood algorithm, with only a few
+changes. And, as Riggle has shown, the method can use any consistency
+test.
+
+The approach of the bounded factorial algorithm is more straightforward:
+generate a factorial typology armed with knowledge of OT. Modeling
+the factorial re-ordering of constraints as promotion allows the
+algorithm to eliminate irrelevant candidates until each tableau is
+itself minimal. Unfortunately, this results in a more complicated
+algorithm.
+
+Of the two approaches, the bounded factorial algorithm is, on the
+surface, theoretically superior. Its worst-case run time is
+exponential in the number of constraints, but evidence provided a
+sufficient number of candidates makes the actual number of calls
+smaller. On the other hand, Hayes' winner-set generation is
+exponential in the number of inputs; there is no obvious theoretical
+limit on the number of inputs. However, \namecite{riggle08a} recently
+gave a limit based on the Vapnik-Chervonenkis dimension (VCD), showing
+that the VCD of OT ensures that the number of non-redundant input
+forms is linear in the size of the constraint set. Briefly, by using
+the VCD of OT, he shows that an optimal learner will need at most
+$k-1$ inputs to learn the order of $k$ constraints. This means that
+both approaches are exponential in the number of constraints.
+
+In the example given above, performance is similar as well: the bounded factorial
+function evaluates 56 tableaux for the example provided above. This is
+less than half of $5!=120$, but the tableaux at later stages are much
+smaller than the original and the algorithm does less work than {\sc
+  Eval} would for each tableau. On the other hand, Hayes' method with
+RCD only evaluates 43 progressively smaller tableaux, although each
+tableaux requires more work. Finally, Riggle's method with r-volume
+evaluates 96 tableaux, but does less work for each tableau than either
+bounded factorial or RCD.
+
+All three algorithms are faster than the naive one. Not only do they
+use properties of OT to reduce the number of tableaux evaluated, they also
+substitute partial evaluation instead of full {\sc Eval}: partial
+evaluation allows them to remove irrelevant candidates after each
+promotion. These smaller tableaux are passed on to children in the
+search tree in the case of the r-volume and bounded factorial
+algorithms.
+
+\bibliographystyle{robbib}
+\bibliography{central}
+\end{document}
+%%% Local Variables: 
+%%% mode: latex
+%%% TeX-master: t
+%%% End: 

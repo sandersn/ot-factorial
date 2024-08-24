@@ -1,0 +1,92 @@
+\begin{thebibliography}{}
+
+\bibitem[\protect\citeauthoryear{Anttila and Andrus}{2006}]{anttila06}
+Anttila, Arto, and Curtis Andrus. 2006.
+\newblock T-orders.
+\newblock Technical Report 873, Stanford University.
+
+\bibitem[\protect\citeauthoryear{Hayes \bgroup et~al.\ \egroup
+  }{2003}]{hayes03}
+Hayes, Bruce, Bruce Tesar, and Kie Zuraw. 2003.
+\newblock Otsoft 2.1.
+\newblock software package,
+  http://www.linguistics.ucla.edu/people/hayes/otsoft/.
+
+\bibitem[\protect\citeauthoryear{Heiberg}{1999}]{heiberg99}
+Heiberg, Andrea. 1999.
+\newblock {\em Features In Optimality Theory: A Computational Model}.
+\newblock PhD thesis, University of Arizona.
+
+\bibitem[\protect\citeauthoryear{McCarthy}{2002}]{mccarthy02}
+McCarthy, John. 2002.
+\newblock {\em A Thematic Guide to Optimality Theory}.
+\newblock Cambridge University Press.
+
+\bibitem[\protect\citeauthoryear{Moreton}{1996}]{moreton96}
+Moreton, Elliot. 1996.
+\newblock Non-computable functions in {O}ptimality {T}heory.
+\newblock Unpublished ms., Available on the Rutgers Optimality Archive as
+  ROA-364.
+
+\bibitem[\protect\citeauthoryear{Pater}{2008}]{pater08}
+Pater, Joe. 2008.
+\newblock Optimization and linguistic typology.
+\newblock Unpublished ms., Ms, University of Massachusetts, Amherst.
+
+\bibitem[\protect\citeauthoryear{Prince}{2002}]{prince02}
+Prince, Alan. 2002.
+\newblock Entailed ranking arguments.
+\newblock Technical Report ROA-500, Rutgers Optimality Archive.
+
+\bibitem[\protect\citeauthoryear{Prince and Smolensky}{1993}]{prince93}
+Prince, Alan, and Paul Smolensky. 1993.
+\newblock Optimality theory: Constraint interaction in generative grammar.
+\newblock Technical Report RuCCS-TR-2, Rutgers University Center for Cognitive
+  Science, New Brunswick, NJ.
+
+\bibitem[\protect\citeauthoryear{Riggle}{2008}a]{riggle08a}
+Riggle, Jason.
+\newblock 2008a.
+\newblock The complexity of ranking hypotheses in optimality theory.
+\newblock {\em Computational Linguistics} 34(4).
+\newblock Forthcoming.
+
+\bibitem[\protect\citeauthoryear{Riggle}{2008}b]{riggle08}
+Riggle, Jason. 2008b.
+\newblock Counting rankings.
+\newblock In B.~Joseph (Ed.), {\em Proceedings of the Linguistic Society of
+  America}, Chicago, January.
+
+\bibitem[\protect\citeauthoryear{Riggle \bgroup et~al.\ \egroup
+  }{2007}]{riggle07}
+Riggle, Jason, Maximilian Bane, James Kirby, and Jeremy O'Brien. 2007.
+\newblock Efficiently computing {OT} typologies, January.
+\newblock Linguistic Society of America 2007 Annual Conference in Anaheim, CA.
+
+\bibitem[\protect\citeauthoryear{Samek-Lodovici and
+  Prince}{1999}]{samek-lodovici99}
+Samek-Lodovici, Vieri, and Alan Prince. 1999.
+\newblock Optima.
+\newblock Technical Report RuCCS-TR-57, Rutgers Center for Cognitive Science.
+\newblock Available on the Rutgers Optimality Archive as ROA-363.
+
+\bibitem[\protect\citeauthoryear{Samek-Lodovici and
+  Prince}{2002}]{samek-lodovici02}
+Samek-Lodovici, Vieri, and Alan Prince. 2002.
+\newblock Fundamental properties of harmonic bounding.
+\newblock Technical Report RuCSS-TR-71, Rutgers Center for Cognitive Science.
+\newblock Available on the Rutgers Optimality Archive as ROA-785.
+
+\bibitem[\protect\citeauthoryear{Tesar and Smolensky}{1993}]{tesar93}
+Tesar, Bruce, and Paul Smolensky. 1993.
+\newblock Learnability in optimality theory: an algorithm and some basic
+  complexity results.
+\newblock Unpublished ms., Available as ROA number 2.
+
+\bibitem[\protect\citeauthoryear{Tesar and Smolensky}{1998}]{tesar98}
+Tesar, Bruce, and Paul Smolensky.
+\newblock 1998.
+\newblock Learnability in optimality theory.
+\newblock {\em Linguistic Inquiry} 29:229--268.
+
+\end{thebibliography}

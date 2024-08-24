@@ -1,0 +1,53 @@
+\documentclass[11pt]{article}
+\usepackage{robbib}
+\author{Nathan Sanders \\ \tt{ncsander@indiana.edu}}
+\title{Generation of Factorial Typologies in OT : Four Algorithms}
+\begin{document}
+\maketitle
+
+In this qualifying paper, I analyze four algorithms for generating
+factorial typologies. The operation of each algorithm is explained and
+its time and space requirements given. % proven?
+A factorial typology is a list of all combinations of outputs that can
+win for some ordering of the relevant constraints. Each combination of
+output forms for a given set of inputs is called a candidate set.
+
+Factorial typologies are an important part of Optimality Theory
+(OT). When constructing a phonological analysis, linguists use a
+factorial typology to check the predictions made by the
+relevant constraints. Candidate sets that are part of the factorial
+typology should be attested in at least one language of the world.
+Conversely, candidate sets that are not part of the factorial typology
+can never win an optimality theoretic evaluation. Therefore, OT predicts that
+these candidate sets should not appear in any
+language.
+
+The first algorithm demonstrated is the naive one,
+which generates all factorial combinations of constraints and then evaluates
+them using OT's {\sc Eval}.  The second is similar, but
+takes care to evaluate only once combinations that must produce that same
+winners. This algorithm is presented for the first time in this
+paper.
+
+The third algorithm is used in Hayes' OT-Soft \cite{hayes03}. Assuming
+a finite candidate set, it tests every possible candidate set with
+Recursive Constraint Demotion (RCD) \cite{tesar93}. Only candidate
+sets for which RCD terminates successfully are part of the factorial
+typology. This algorithm avoids the problem of generating all
+factorial combinations of constraints. To my knowledge, this is the
+first published analysis of this algorithm, although the algorithm is
+moderately well-known and is referenced in other work such as
+\namecite{pater08}.
+
+The fourth algorithm is based on \quotecite{riggle08} work on
+$r$-volumes. Riggle's algorithm to calculate $r$-volumes is similar to
+RCD but can terminate faster. This factorial typology algorithm,like
+Hayes', evaluates every candidate set, but since its core is the faster
+$r$-volume algorithm, it is correspondingly faster. Riggle first
+demonstrated the algorithm in a presentation to the Linguistic Society
+of America \cite{riggle07}.
+
+\bibliographystyle{robbib}
+\bibliography{central}
+
+\end{document}
