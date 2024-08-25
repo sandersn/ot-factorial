@@ -1,4 +1,4 @@
-# Factorial Typologies in Optimality Theory
+# Generation of Factorial Typologies in OT: Four Algorithms
 
 Includes
 
@@ -9,4 +9,4 @@ I believe Factorial.hs is the closest to the final version and count_factorial.p
 RVolume.hs is missing my contribution (labelled, at least), and has some different
 names and less-related things still in.
 
-I guess 2006 is when I switched from Python to Haskell!
+I guess 2007 is when I switched from Python to Haskell!
